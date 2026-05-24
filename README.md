@@ -134,11 +134,3 @@ cd frontend && pnpm dev
 ```
 
 ---
-
-## 📂 Repository & Contributing
-
-**🔗 GitHub Repository:** [https://github.com/GreenCRM/GreenCRM](https://github.com/GreenCRM/GreenCRM)
-
-Feel free to fork the repository, submit issues, and contribute to the project!
-
----
