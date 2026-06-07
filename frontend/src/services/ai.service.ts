@@ -81,8 +81,9 @@ export const aiService = {
     },
 
     chat: async (messages: ChatMessage[]) => {
-        // If mock mode is enabled, simulate a response
-        if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
+        // If mock mode is enabled via env or runtime toggle, simulate a response
+        const runtimeMock = typeof window !== 'undefined' && localStorage.getItem('useMockAI') === 'true';
+        if (runtimeMock || import.meta.env.VITE_USE_MOCK_DATA === 'true') {
             await new Promise(resolve => setTimeout(resolve, 1500));
             return {
                 id: crypto.randomUUID(),
@@ -91,8 +92,11 @@ export const aiService = {
             };
         }
 
+        // Prepare a minimal messages payload for the backend/LLM provider
+        const payloadMessages = messages.map(m => ({ role: m.role, content: (m as any).content }));
+
         try {
-            const response = await api.post('/ai/chat', { messages });
+            const response = await api.post('/ai/chat', { messages: payloadMessages });
             const data = aiService.parseStreamData(response.data);
 
             if (typeof data === 'string') {
@@ -103,8 +107,22 @@ export const aiService = {
                 };
             }
             return data;
-        } catch (error) {
+        } catch (error: any) {
             console.error('AI chat failed:', error);
+
+            // If unauthorized or missing token, provide a helpful fallback for local development
+            const status = error?.response?.status;
+            if (status === 401 || status === 403 || !localStorage.getItem('accessToken')) {
+                // Return a soft-failure assistant message so the UI remains usable
+                return {
+                    id: crypto.randomUUID(),
+                    role: 'assistant',
+                    content:
+                        "AI unavailable: please sign in to use live AI features. Showing a local fallback response instead."
+                };
+            }
+
+            // Otherwise rethrow so callers can surface the error
             throw error;
         }
     },

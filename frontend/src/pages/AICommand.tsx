@@ -83,7 +83,7 @@ const ContactCard = ({ contact, companyName }: { contact: any; companyName: stri
 
 const AICommand = () => {
     const navigate = useNavigate();
-    const { setDataset } = useDataset();
+    const { setDataset, loadSampleDataset } = useDataset();
     const [query, setQuery] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [dragActive, setDragActive] = useState(false);
@@ -370,12 +370,12 @@ const AICommand = () => {
                     </div>
 
                     {/* Sample CSV */}
-                    <div className='mt-5 flex justify-center'>
-                        <a href='/sample-crm-data.csv' download='sample-crm-data.csv'
-                            className='inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs text-gray-500 hover:border-[#149403]/40 hover:text-[#149403] hover:bg-[#fafffc] transition-all shadow-sm font-sans'>
-                            <FileText className='w-3.5 h-3.5' />
-                            Download Sample CSV file
-                        </a>
+                    <div className='mt-5 flex flex-col sm:flex-row justify-center gap-3'>
+                        <button type='button' onClick={loadSampleDataset}
+                            className='inline-flex items-center gap-2 px-5 py-2.5 bg-[#149403] text-white rounded-xl text-xs font-semibold hover:bg-[#0f7a0f] transition-all shadow-sm'>
+                            <Sparkles className='w-3.5 h-3.5' />
+                            Load Demo CRM Dataset
+                        </button>
                     </div>
 
                     {/* Processing Overlay */}

@@ -55,13 +55,20 @@ import { useDataset } from '@/context/DatasetContext';
 
 const Dashboard: React.FC = () => {
     const navigate = useNavigate();
-    const { dataset, companies, selectedCompanyIndex, setSelectedCompanyIndex } = useDataset();
+    const { dataset, companies, selectedCompanyIndex, setSelectedCompanyIndex, loadSampleDataset } = useDataset();
     const [activeTab, setActiveTab] = useState('Emails');
     const [activeNav, setActiveNav] = useState('Dashboard');
     const [aiInput, setAiInput] = useState('');
     const [isAiResponding, setIsAiResponding] = useState(false);
     const [chatMessages, setChatMessages] = useState<any[]>([]);
     const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
+    const [useMockAI, setUseMockAI] = useState<boolean>(() => {
+        try {
+            return localStorage.getItem('useMockAI') === 'true';
+        } catch {
+            return false;
+        }
+    });
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
@@ -144,6 +151,8 @@ const Dashboard: React.FC = () => {
         setIsAiResponding(true);
 
         try {
+            // If runtime mock toggle enabled, set env via localStorage for ai.service
+            try { localStorage.setItem('useMockAI', useMockAI ? 'true' : 'false'); } catch {}
             const response = await aiService.chat([...chatMessages, userMessage]);
             setChatMessages(prev => [...prev, response]);
         } catch (error) {
@@ -173,13 +182,23 @@ const Dashboard: React.FC = () => {
                             Use the research tool to analyze a company and press <strong>"Move to Dashboard"</strong> to
                             populate your dashboard with real intelligence.
                         </p>
-                        <Link
-                            to='/ai-command'
-                            className='inline-flex items-center gap-3 px-8 py-4 bg-[#22c55e] text-white font-bold rounded-2xl hover:bg-[#16a34a] transition-all shadow-xl shadow-green-100 hover:-translate-y-1'
-                        >
-                            Go to AI Command Centre
-                            <ArrowRight size={20} />
-                        </Link>
+                        <div className='flex flex-col sm:flex-row items-center justify-center gap-4'>
+                            <button
+                                type='button'
+                                onClick={loadSampleDataset}
+                                className='inline-flex items-center gap-3 px-8 py-4 bg-[#22c55e] text-white font-bold rounded-2xl hover:bg-[#16a34a] transition-all shadow-xl shadow-green-100 hover:-translate-y-1'
+                            >
+                                Load Demo CRM Data
+                                <Database size={20} />
+                            </button>
+                            <Link
+                                to='/ai-command'
+                                className='inline-flex items-center gap-3 px-8 py-4 bg-white text-[#22c55e] border border-[#22c55e] font-bold rounded-2xl hover:bg-green-50 transition-all shadow-sm'
+                            >
+                                Go to AI Command Centre
+                                <ArrowRight size={20} />
+                            </Link>
+                        </div>
                     </motion.div>
                 </main>
             </div>
@@ -1412,6 +1431,26 @@ const Dashboard: React.FC = () => {
                                             </button>
                                         </div>
                                     </form>
+                                    <div className='mt-3 flex items-center justify-between text-xs text-gray-500'>
+                                        <label className='inline-flex items-center gap-2'>
+                                            <input
+                                                type='checkbox'
+                                                checked={useMockAI}
+                                                onChange={e => {
+                                                    const v = e.target.checked;
+                                                    setUseMockAI(v);
+                                                    try { localStorage.setItem('useMockAI', v ? 'true' : 'false'); } catch {}
+                                                }}
+                                                className='w-4 h-4'
+                                            />
+                                            <span>Use Mock AI</span>
+                                        </label>
+                                        <div>
+                                            {chatMessages.length > 0 && chatMessages[chatMessages.length - 1]?.content?.includes('AI unavailable') && (
+                                                <button onClick={() => navigate('/auth/login')} className='px-3 py-1 bg-[#22c55e] text-white rounded-md'>Sign in to enable AI</button>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </motion.div>
                         )}

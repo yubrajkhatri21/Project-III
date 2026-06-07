@@ -152,6 +152,18 @@ To train on your own CRM data:
    python train_model.py
    ```
 
+### Faster training mode
+For quicker iterations, use the fast option:
+```bash
+python train_model.py --fast
+```
+
+To force a specific model type:
+```bash
+python train_model.py --model random_forest
+python train_model.py --model hgb
+```
+
 ## Integration with Backend
 
 To integrate predictions into your Node.js backend:

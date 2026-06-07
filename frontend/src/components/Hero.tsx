@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import VideoModal from './VideoModal';
 
 const phrases = [
     'Research leads with AI',
@@ -14,14 +13,7 @@ const Hero: React.FC = () => {
     const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
     const [displayedText, setDisplayedText] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
-    const [showVideoModal, setShowVideoModal] = useState(false);
     const navigate = useNavigate();
-
-    // YouTube video URL with your actual video ID
-    const videoUrl = "https://www.youtube.com/embed/Tt0PqFSncuA?autoplay=1&rel=0&modestbranding=1";
-
-    const openVideoModal = () => setShowVideoModal(true);
-    const closeVideoModal = () => setShowVideoModal(false);
 
     useEffect(() => {
         const currentPhrase = phrases[currentPhraseIndex];
@@ -92,9 +84,6 @@ const Hero: React.FC = () => {
                         >
                             Start Using GreenCRM
                         </button>
-                        <button onClick={openVideoModal} className='bg-white text-[#111827] border border-[#E5E7EB] px-8 py-4 rounded-xl font-bold text-lg hover:bg-[#F3FBF6] transition-colors shadow-sm cursor-pointer'>
-                            View Demo
-                        </button>
                     </div>
                 </div>
 
@@ -130,12 +119,6 @@ const Hero: React.FC = () => {
             </div>
         </section>
         
-        {/* Video Modal */}
-        <VideoModal 
-            isOpen={showVideoModal}
-            onClose={closeVideoModal}
-            videoUrl={videoUrl}
-        />
         </>
     );
 };

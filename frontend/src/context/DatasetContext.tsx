@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { User } from '../services/auth.service';
+import { sampleDataset } from '../data/sampleDataset';
 
 interface Lead {
     id: string;
@@ -57,6 +58,7 @@ interface DatasetContextType {
     dataset: any | null;
     setDataset: (data: any) => void;
     clearDataset: () => void;
+    loadSampleDataset: () => void;
     leads: Lead[];
     setLeads: React.Dispatch<React.SetStateAction<Lead[]>>;
     updateLead: (id: string, updates: Partial<Lead>) => void;
@@ -303,6 +305,10 @@ export const DatasetProvider: React.FC<{ children: ReactNode }> = ({ children })
         localStorage.setItem(getStorageKey('crm_emails'), JSON.stringify(allEmails));
     }, [user, getStorageKey]);
 
+    const loadSampleDataset = useCallback(() => {
+        setDataset(sampleDataset);
+    }, [setDataset]);
+
     const updateLead = useCallback((id: string, updates: Partial<Lead>) => {
         setLeads(prev => {
             const newLeads = prev.map(lead => (lead.id === id ? { ...lead, ...updates } : lead));
@@ -353,6 +359,7 @@ export const DatasetProvider: React.FC<{ children: ReactNode }> = ({ children })
                 dataset,
                 setDataset,
                 clearDataset,
+                loadSampleDataset,
                 leads,
                 setLeads,
                 updateLead,

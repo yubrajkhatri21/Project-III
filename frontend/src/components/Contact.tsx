@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { contactService } from '../services/contact.service';
-import { Mail, Phone, MapPin, Github, GraduationCap, ArrowUpRight } from 'lucide-react';
+import { Mail, Phone, MapPin, GraduationCap, ArrowUpRight } from 'lucide-react';
 
 const Contact: React.FC = () => {
     const [formData, setFormData] = useState({
@@ -48,12 +48,6 @@ const Contact: React.FC = () => {
             icon: MapPin,
             label: 'Location',
             value: 'Global / Remote',
-            href: null
-        },
-        {
-            icon: Github,
-            label: 'GitHub',
-            value: 'GreenCRM',
             href: null
         }
     ];

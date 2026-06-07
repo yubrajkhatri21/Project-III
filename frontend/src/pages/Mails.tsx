@@ -111,7 +111,7 @@ const REMINDERS = [
 
 const Mails: React.FC = () => {
     const navigate = useNavigate();
-    const { dataset, emails, leads } = useDataset();
+    const { dataset, emails, leads, loadSampleDataset } = useDataset();
     const [activeFolder, setActiveFolder] = useState('Inbox');
     const [selectedEmail, setSelectedEmail] = useState<any>(null);
     const [isComposing, setIsComposing] = useState(false);
@@ -256,13 +256,23 @@ const Mails: React.FC = () => {
                         <p className='text-gray-500 mb-10 leading-relaxed'>
                             Populate your dashboard with real intelligence to start managing your inbox.
                         </p>
-                        <Link
-                            to='/ai-command'
-                            className='inline-flex items-center gap-3 px-8 py-4 bg-[#22c55e] text-white font-bold rounded-2xl hover:bg-[#16a34a] transition-all shadow-xl shadow-green-100 hover:-translate-y-1'
-                        >
-                            Go to AI Command Centre
-                            <ArrowRight size={20} />
-                        </Link>
+                        <div className='flex flex-col sm:flex-row items-center justify-center gap-4'>
+                            <button
+                                type='button'
+                                onClick={loadSampleDataset}
+                                className='inline-flex items-center gap-3 px-8 py-4 bg-[#22c55e] text-white font-bold rounded-2xl hover:bg-[#16a34a] transition-all shadow-xl shadow-green-100 hover:-translate-y-1'
+                            >
+                                Load Demo CRM Data
+                                <Database size={20} />
+                            </button>
+                            <Link
+                                to='/ai-command'
+                                className='inline-flex items-center gap-3 px-8 py-4 bg-white text-[#22c55e] border border-[#22c55e] font-bold rounded-2xl hover:bg-green-50 transition-all shadow-sm'
+                            >
+                                Go to AI Command Centre
+                                <ArrowRight size={20} />
+                            </Link>
+                        </div>
                     </motion.div>
                 </main>
             </div>
