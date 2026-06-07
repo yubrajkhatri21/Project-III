@@ -6,8 +6,6 @@ GreenCRM is a next-generation, AI-driven CRM platform designed to automate the h
 
 **🌐 Try it Live:** [https://greencrm.vercel.app](https://greencrm.vercel.app)
 
-**🎥 Watch Demo:** [https://youtu.be/Tt0PqFSncuA](https://youtu.be/Tt0PqFSncuA)
-
 ## 📸 Screenshots
 
 ### Landing Page
