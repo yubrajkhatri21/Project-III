@@ -44,13 +44,14 @@ import {
 } from 'recharts';
 import { motion } from 'framer-motion';
 import { authService } from '../services/auth.service';
+import { formatNpr } from '../utils/currency';
 
 // --- MOCK DATA ---
 const KPI_DATA = [
     { label: 'Total Leads', value: '1,248', change: '+12.5%', trend: 'up' },
     { label: 'New Leads This Month', value: '+184', change: '+5.2%', trend: 'up' },
     { label: 'Total Deals in Pipeline', value: '96', change: '-2.1%', trend: 'down' },
-    { label: 'Total Revenue in Pipeline', value: '$420,000', change: '+8.4%', trend: 'up' },
+    { label: 'Total Revenue in Pipeline', value: formatNpr(420000), change: '+8.4%', trend: 'up' },
     { label: 'Closed Deals This Month', value: '18', change: '+15.0%', trend: 'up' },
     { label: 'Conversion Rate', value: '23%', change: '+3.1%', trend: 'up' }
 ];
@@ -592,7 +593,7 @@ const Analytics: React.FC = () => {
                                         <p className='text-[10px] font-bold text-gray-400 uppercase'>
                                             Quarterly Target
                                         </p>
-                                        <p className='text-sm font-black text-gray-900'>$500,000</p>
+                                        <p className='text-sm font-black text-gray-900'>{formatNpr(500000)}</p>
                                     </div>
                                 </div>
                                 <div className='text-right'>
@@ -682,7 +683,7 @@ const Analytics: React.FC = () => {
                                             </span>
                                         </td>
                                         <td className='px-8 py-5 text-right font-black text-gray-900'>
-                                            ${row.revenue.toLocaleString()}
+                                            {formatNpr(row.revenue)}
                                         </td>
                                         <td className='px-8 py-5 text-center'>
                                             <div className='flex items-center justify-center gap-2'>
@@ -698,7 +699,7 @@ const Analytics: React.FC = () => {
                                             </div>
                                         </td>
                                         <td className='px-8 py-5 text-right font-bold text-gray-500'>
-                                            ${row.avgDeal.toLocaleString()}
+                                            {formatNpr(row.avgDeal)}
                                         </td>
                                     </tr>
                                 ))}

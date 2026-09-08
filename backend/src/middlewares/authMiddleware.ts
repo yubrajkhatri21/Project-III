@@ -35,6 +35,7 @@ export async function authMiddleware(c: Context, next: Next) {
         // Attach user info to context for use in handlers
         c.set('userId', payload.userId);
         c.set('userEmail', payload.email);
+        c.set('userRole', payload.role);
 
         await next();
     } catch (error) {

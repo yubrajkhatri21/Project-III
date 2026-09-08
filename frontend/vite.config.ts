@@ -28,7 +28,7 @@ const config: UserConfigFn = ({ mode }) => {
             allowedHosts: process.env.ALLOWED_HOSTS?.split(',') || true,
             host: '0.0.0.0',
             port: parseInt(process.env.VITE_PORT!) || 5173,
-            strictPort: false, // Allow Vite to pick next available port if 5173 is busy
+            strictPort: true,
             watch: {
                 ignored: ['node_modules']
             },

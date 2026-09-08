@@ -1,28 +1,27 @@
 import { Hono, Context } from 'hono';
-import { Llm, LlmProvider } from '@uptiqai/integrations-sdk';
 import catchAsync from '../utils/catchAsync.ts';
 import { authMiddleware } from '../middlewares/authMiddleware.ts';
 import * as aiService from '../services/aiService.ts';
+import prisma from '../client.ts';
 
 const aiRoutes = new Hono();
 
 aiRoutes.post('/chat', authMiddleware, catchAsync(async (c: Context) => {
   const body = await c.req.json();
-  const { messages, model } = body;
-
-  const llm = new Llm({ provider: process.env.LLM_PROVIDER as LlmProvider });
-
-  const result = await llm.createStream({
-    messages,
-    model: model || process.env.LLM_MODEL,
-    options: { temperature: 0.7, maxTokens: 1000, topP: 0.9 }
-  });
-
-  c.header('Content-Type', 'text/event-stream');
-  c.header('Cache-Control', 'no-cache');
-  c.header('Connection', 'keep-alive');
-
-  return c.body(result.data);
+  const messages = body?.messages;
+  if (!Array.isArray(messages)) return c.json({ error: 'messages must be an array' }, 400);
+  const userId = c.get('userId');
+  const [leadCount, openDeals, pendingTasks, openTickets] = await Promise.all([
+    prisma.lead.count({ where: { userId, isDeleted: false } }),
+    prisma.deal.count({ where: { userId, isDeleted: false, stage: { notIn: ['Won', 'Lost'] } } }),
+    prisma.task.count({ where: { userId, isDeleted: false, status: { not: 'Completed' } } }),
+    prisma.ticket.count({ where: { userId, isDeleted: false, status: { not: 'Closed' } } })
+  ]);
+  const contextMessage = {
+    role: 'system',
+    content: `You are GreenCRM's sales assistant. Use this current CRM snapshot when relevant: ${leadCount} leads, ${openDeals} open deals, ${pendingTasks} pending tasks, and ${openTickets} open support tickets. Give concise, actionable answers and never invent customer-specific facts.`
+  };
+  return c.json(await aiService.chat([contextMessage, ...messages]));
 }));
 
 aiRoutes.post('/research-company', authMiddleware, catchAsync(async (c: Context) => {

@@ -5,8 +5,11 @@ import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import authRoutes from './routes/auth.routes.ts';
 import contactRoutes from './routes/contact.routes.ts';
+import emailRoutes from './routes/email.routes.ts';
 import aiRoutes from './routes/ai.routes.ts';
 import mlRoutes from './routes/ml.routes.ts';
+import leadRoutes from './routes/lead.routes.ts';
+import crmRoutes from './routes/crm.routes.ts';
 
 const app = new Hono();
 
@@ -41,8 +44,11 @@ app.get('/health', c => {
 // Mount routes
 app.route('/auth', authRoutes);
 app.route('/contact', contactRoutes);
+app.route('/emails', emailRoutes);
 app.route('/ai', aiRoutes);
 app.route('/ml', mlRoutes);
+app.route('/leads', leadRoutes);
+app.route('/crm', crmRoutes);
 
 // send back a 404 error for any unknown api request
 app.notFound(() => {

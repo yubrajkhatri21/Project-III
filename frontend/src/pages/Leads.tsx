@@ -35,6 +35,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { authService } from '../services/auth.service';
 import { useDataset } from '@/context/DatasetContext';
+import { formatNpr } from '../utils/currency';
 
 interface Lead {
     id: string;
@@ -369,7 +370,7 @@ const Leads: React.FC = () => {
                                                         }}
                                                         className='text-xs font-bold text-gray-900 cursor-pointer hover:text-[#22c55e] transition-colors'
                                                     >
-                                                        ${(Number(lead.dealValue) || 0).toLocaleString()}
+                                                        {formatNpr(Number(lead.dealValue) || 0)}
                                                     </p>
                                                 )}
                                             </td>
@@ -463,7 +464,7 @@ const Leads: React.FC = () => {
                                             />
                                             <InfoField
                                                 label='Deal Value'
-                                                value={`$${(Number(selectedLead.dealValue) || 0).toLocaleString()}`}
+                                                value={formatNpr(Number(selectedLead.dealValue) || 0)}
                                             />
                                             <InfoField
                                                 label='Lead Source'

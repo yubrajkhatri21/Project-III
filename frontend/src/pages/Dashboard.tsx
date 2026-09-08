@@ -51,7 +51,9 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { authService } from '../services/auth.service';
 import { aiService } from '../services/ai.service';
+import { crmService } from '../services/crm.service';
 import { useDataset } from '@/context/DatasetContext';
+import { getCurrentUserRole } from '../utils/access';
 
 const Dashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -73,14 +75,76 @@ const Dashboard: React.FC = () => {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
     const [showCompanySelector, setShowCompanySelector] = useState(false);
+    const [notificationFeed, setNotificationFeed] = useState<any[]>([]);
+    const [recentActivityFeed, setRecentActivityFeed] = useState<any[]>([]);
+    const [auditTrail, setAuditTrail] = useState<any[]>([]);
+    const userRole = getCurrentUserRole();
+    const quickPrompts = [
+        'Give me a summary of my current CRM priorities',
+        'Which leads should I follow up with first?',
+        'What tasks and support tickets need attention today?'
+    ];
 
     const currentCompanyDataset = companies[selectedCompanyIndex] || dataset;
 
-    const notifications = [
+    const defaultNotifications = [
         { id: 1, text: 'New lead identified', detail: 'VP Data Infrastructure', type: 'lead', time: '2m ago' },
         { id: 2, text: 'Deal probability increased', detail: 'Updated to 35%', type: 'deal', time: '15m ago' },
-        { id: 3, text: 'New activity logged', detail: 'Contact responded to email', type: 'activity', time: '1h ago' }
+        { id: 3, text: 'New activity logged', detail: 'Contact responded to email', type: 'activity', time: '1h ago' },
+        { id: 4, text: `Role update: ${userRole}`, detail: 'Your access level is active', type: 'activity', time: 'now' }
     ];
+
+    const notifications = notificationFeed.length > 0 ? notificationFeed : defaultNotifications;
+
+    useEffect(() => {
+        let active = true;
+
+        const loadActivityFeed = async () => {
+            try {
+                const [notificationItems, activityItems, auditItems] = await Promise.all([
+                    crmService.list('notifications').catch(() => []),
+                    crmService.list('activities').catch(() => []),
+                    crmService.auditLogs().catch(() => [])
+                ]);
+
+                if (!active) return;
+
+                const mappedNotifications = (notificationItems.length ? notificationItems : defaultNotifications).slice(0, 4).map((item: any, index: number) => ({
+                    id: item.id || `${item.title || 'notification'}-${index}`,
+                    text: item.title || item.text || 'Team update',
+                    detail: item.message || item.detail || 'New update from your CRM',
+                    type: item.type || (index % 2 === 0 ? 'lead' : 'activity'),
+                    time: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : item.time || 'now'
+                }));
+
+                const mappedActivity = (activityItems.length ? activityItems : []).slice(0, 4).map((item: any) => ({
+                    id: item.id || Math.random().toString(36).slice(2),
+                    title: item.type || 'Activity',
+                    detail: item.description || item.message || 'CRM activity recorded',
+                    time: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'recently'
+                }));
+
+                const mappedAudit = (auditItems.length ? auditItems : []).slice(0, 4).map((item: any) => ({
+                    id: item.id || Math.random().toString(36).slice(2),
+                    action: item.action || 'Updated record',
+                    entity: item.entityType || 'CRM record',
+                    time: item.createdAt ? new Date(item.createdAt).toLocaleString() : 'recently'
+                }));
+
+                setNotificationFeed(mappedNotifications);
+                setRecentActivityFeed(mappedActivity);
+                setAuditTrail(mappedAudit);
+            } catch (error) {
+                console.warn('Could not load CRM activity feed:', error);
+            }
+        };
+
+        loadActivityFeed();
+
+        return () => {
+            active = false;
+        };
+    }, [userRole]);
 
     useEffect(() => {
         if (!searchTerm.trim() || !currentCompanyDataset) {
@@ -145,21 +209,35 @@ const Dashboard: React.FC = () => {
         e.preventDefault();
         if (!aiInput.trim()) return;
 
-        const userMessage = { role: 'user', content: aiInput };
-        setChatMessages([...chatMessages, userMessage]);
+        const userMessage = { id: crypto.randomUUID(), role: 'user' as const, content: aiInput };
+        const nextMessages = [...chatMessages, userMessage];
+        setChatMessages(nextMessages);
         setAiInput('');
         setIsAiResponding(true);
 
         try {
             // If runtime mock toggle enabled, set env via localStorage for ai.service
             try { localStorage.setItem('useMockAI', useMockAI ? 'true' : 'false'); } catch {}
-            const response = await aiService.chat([...chatMessages, userMessage]);
+            const response = await aiService.chat(nextMessages);
             setChatMessages(prev => [...prev, response]);
         } catch (error) {
             console.error('AI chat failed:', error);
+            setChatMessages(prev => [
+                ...prev,
+                {
+                    id: crypto.randomUUID(),
+                    role: 'assistant',
+                    content: 'I could not reach the AI service. Please check that the backend is running and try again.'
+                }
+            ]);
         } finally {
             setIsAiResponding(false);
         }
+    };
+
+    const submitQuickPrompt = (prompt: string) => {
+        setAiInput(prompt);
+        setIsAiPanelOpen(true);
     };
 
     // --- FALLBACK FOR NO DATASET ---
@@ -1193,6 +1271,48 @@ const Dashboard: React.FC = () => {
                             </div>
                         </div>
 
+                        <div className='bg-white p-6 rounded-3xl border border-gray-100 shadow-sm mt-6'>
+                            <div className='flex items-center justify-between mb-5'>
+                                <div className='flex items-center gap-2'>
+                                    <Activity size={18} className='text-[#22c55e]' />
+                                    <h3 className='font-bold text-gray-900 text-sm'>Recent CRM activity</h3>
+                                </div>
+                                <span className='text-[10px] font-bold uppercase tracking-widest text-gray-400'>Live feed</span>
+                            </div>
+
+                            <div className='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+                                <div className='space-y-3'>
+                                    {recentActivityFeed.length > 0 ? recentActivityFeed.map((item: any) => (
+                                        <div key={item.id} className='p-3 rounded-2xl bg-gray-50 border border-gray-100'>
+                                            <div className='flex items-center justify-between gap-2'>
+                                                <p className='text-xs font-bold text-gray-900'>{item.title}</p>
+                                                <span className='text-[10px] text-gray-400'>{item.time}</span>
+                                            </div>
+                                            <p className='mt-1 text-[11px] text-gray-600'>{item.detail}</p>
+                                        </div>
+                                    )) : (
+                                        <div className='p-3 rounded-2xl bg-gray-50 border border-gray-100 text-sm text-gray-500'>
+                                            No recent CRM activity yet.
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className='space-y-3'>
+                                    {auditTrail.length > 0 ? auditTrail.map((item: any) => (
+                                        <div key={item.id} className='p-3 rounded-2xl border border-gray-100 bg-white'>
+                                            <p className='text-[10px] font-bold uppercase tracking-widest text-[#22c55e]'>{item.entity}</p>
+                                            <p className='mt-1 text-sm font-bold text-gray-900'>{item.action}</p>
+                                            <p className='mt-1 text-[11px] text-gray-500'>{item.time}</p>
+                                        </div>
+                                    )) : (
+                                        <div className='p-3 rounded-2xl bg-gray-50 border border-gray-100 text-sm text-gray-500'>
+                                            No audit trail available yet.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
                         {/* ENGAGEMENT & TIMELINE */}
                         <div className='bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col'>
                             <div className='flex items-center gap-2 mb-6'>
@@ -1361,6 +1481,18 @@ const Dashboard: React.FC = () => {
                                                 Ask anything about this account, leads, deals, or market strategy for
                                                 instant AI-powered insights.
                                             </p>
+                                            <div className='mt-5 flex flex-wrap justify-center gap-2'>
+                                                {quickPrompts.map(prompt => (
+                                                    <button
+                                                        key={prompt}
+                                                        type='button'
+                                                        onClick={() => submitQuickPrompt(prompt)}
+                                                        className='px-3 py-2 rounded-xl bg-white/70 border border-white/70 text-[11px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-white transition-colors'
+                                                    >
+                                                        {prompt}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
                                     {chatMessages.map((msg, i) => (
@@ -1445,7 +1577,16 @@ const Dashboard: React.FC = () => {
                                             />
                                             <span>Use Mock AI</span>
                                         </label>
-                                        <div>
+                                        <div className='flex items-center gap-2'>
+                                            {chatMessages.length > 0 && (
+                                                <button
+                                                    type='button'
+                                                    onClick={() => setChatMessages([])}
+                                                    className='px-3 py-1 rounded-md border border-gray-200 hover:bg-white text-gray-600 transition-colors'
+                                                >
+                                                    Clear chat
+                                                </button>
+                                            )}
                                             {chatMessages.length > 0 && chatMessages[chatMessages.length - 1]?.content?.includes('AI unavailable') && (
                                                 <button onClick={() => navigate('/auth/login')} className='px-3 py-1 bg-[#22c55e] text-white rounded-md'>Sign in to enable AI</button>
                                             )}

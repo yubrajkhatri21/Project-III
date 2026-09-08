@@ -55,5 +55,16 @@ export const leadService = {
         }
         const response = await api.post('/leads', leadData);
         return response.data;
+    },
+
+    updateLead: async (id: string, leadData: Partial<Lead>) => {
+        if (import.meta.env.VITE_USE_MOCK_DATA === 'true') return { lead: { id, ...leadData } };
+        const response = await api.patch(`/leads/${id}`, leadData);
+        return response.data;
+    },
+
+    archiveLead: async (id: string) => {
+        const response = await api.delete(`/leads/${id}`);
+        return response.data;
     }
 };

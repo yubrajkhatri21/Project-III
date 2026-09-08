@@ -22,5 +22,6 @@
         "allowImportingTsExtensions": true /* Allow importing files with .ts extensions. This is useful for TypeScript projects that want to import other TypeScript files directly. */,
         "rewriteRelativeImportExtensions": true /* Rewrite relative import paths to include file extensions. This is useful for projects that want to ensure all imports are explicit about their file types. */
     },
-    "exclude": ["prisma.config.ts"]
+    "include": ["src/**/*.ts"],
+    "exclude": ["prisma.config.ts", "create-test-user.ts"]
 }

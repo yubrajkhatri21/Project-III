@@ -22,6 +22,17 @@ model User {
   leads      Lead[]
   companies  Company[]
   isDeleted  Boolean        @default(false)
+  role       String         @default("Sales Representative")
+  tasks      Task[]
+  deals      Deal[]
+  tickets    Ticket[]
+  products   Product[]
+  quotes     Quote[]
+  invoices   Invoice[]
+  activities Activity[]
+  notifications Notification[]
+  auditLogs  AuditLog[]
+  automationRules AutomationRule[]
 
   @@index([email])
 }
@@ -42,15 +53,176 @@ model Lead {
   subIndustry     String?
   description     String?
   source          String?
+  phone           String?
+  priority        String   @default("Medium")
+  score           Int      @default(0)
+  notes           String?
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   isDeleted       Boolean  @default(false)
+  deals           Deal[]
 
   @@index([userId])
   @@index([email])
   @@index([accountId])
+}
+
+model Deal {
+  id              String   @id @default(uuid())
+  name            String
+  stage           String   @default("New Lead")
+  value           Float    @default(0)
+  probability     Int      @default(10)
+  expectedCloseDate String?
+  lostReason      String?
+  leadId          String?
+  lead            Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  isDeleted       Boolean  @default(false)
+  @@index([userId, stage])
+}
+
+model Task {
+  id              String   @id @default(uuid())
+  title           String
+  description     String?
+  dueDate         String?
+  priority        String   @default("Medium")
+  status          String   @default("Open")
+  type            String   @default("Task")
+  customerName    String?
+  assignedTo      String?
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  isDeleted       Boolean  @default(false)
+  @@index([userId, status])
+  @@index([dueDate])
+}
+
+model Ticket {
+  id              String   @id @default(uuid())
+  subject         String
+  description     String?
+  category        String?
+  priority        String   @default("Medium")
+  status          String   @default("Open")
+  customerName    String?
+  satisfaction    Int?
+  resolution      String?
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  isDeleted       Boolean  @default(false)
+  @@index([userId, status])
+}
+
+model Product {
+  id              String   @id @default(uuid())
+  name            String
+  category        String?
+  description     String?
+  price           Float    @default(0)
+  active          Boolean  @default(true)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  isDeleted       Boolean  @default(false)
+  @@index([userId, active])
+}
+
+model Quote {
+  id              String   @id @default(uuid())
+  number          String
+  customerName    String
+  amount          Float    @default(0)
+  tax             Float    @default(0)
+  discount        Float    @default(0)
+  status          String   @default("Draft")
+  validUntil      String?
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  isDeleted       Boolean  @default(false)
+  @@unique([userId, number])
+}
+
+model Invoice {
+  id              String   @id @default(uuid())
+  number          String
+  customerName    String
+  amount          Float    @default(0)
+  dueDate         String?
+  status          String   @default("Pending")
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  isDeleted       Boolean  @default(false)
+  @@unique([userId, number])
+}
+
+model Activity {
+  id              String   @id @default(uuid())
+  type            String
+  description     String
+  entityType      String?
+  entityId        String?
+  occurredAt      DateTime @default(now())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, occurredAt])
+}
+
+model Notification {
+  id              String   @id @default(uuid())
+  title           String
+  message         String
+  type            String   @default("info")
+  read            Boolean  @default(false)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  @@index([userId, read])
+}
+
+model AuditLog {
+  id              String   @id @default(uuid())
+  action          String
+  entityType      String
+  entityId        String?
+  before          Json?
+  after           Json?
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  @@index([userId, entityType, createdAt])
+}
+
+model AutomationRule {
+  id          String   @id @default(uuid())
+  name        String
+  trigger     String
+  action      String
+  owner       String
+  frequency   String   @default("Instant")
+  active      Boolean  @default(true)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isDeleted   Boolean  @default(false)
+
+  @@index([userId, active])
 }
 
 model Company {

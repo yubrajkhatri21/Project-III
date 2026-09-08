@@ -142,7 +142,7 @@ mlRoutes.get('/info', catchAsync(async (c: Context) => {
       return c.json({ 
         status: 'error',
         message: 'Failed to retrieve model information'
-      }, response.status);
+      }, response.status as any);
     }
 
     const info = await response.json();

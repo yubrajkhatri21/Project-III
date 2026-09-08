@@ -10,6 +10,8 @@ import Mails from './pages/Mails';
 import Leads from './pages/Leads';
 import Deals from './pages/Deals';
 import Analytics from './pages/Analytics';
+import OperationsCenter from './pages/OperationsCenter';
+import AutomationCenter from './pages/AutomationCenter';
 import UserManagement from './pages/UserManagement';
 import Settings from './pages/Settings';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -84,15 +86,31 @@ function App() {
                     <Route
                         path='/analytics'
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute allowedRoles={['Sales Manager', 'Administrator']}>
                                 <Analytics />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path='/operations'
+                        element={
+                            <ProtectedRoute allowedRoles={['Sales Manager', 'Administrator']}>
+                                <OperationsCenter />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path='/automation'
+                        element={
+                            <ProtectedRoute allowedRoles={['Sales Manager', 'Administrator']}>
+                                <AutomationCenter />
                             </ProtectedRoute>
                         }
                     />
                     <Route
                         path='/user-management'
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute allowedRoles={['Administrator']}>
                                 <UserManagement />
                             </ProtectedRoute>
                         }

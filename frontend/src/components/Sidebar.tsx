@@ -11,7 +11,8 @@ import {
     BarChart3,
     Shield,
     Settings,
-    LogOut
+    LogOut,
+    Workflow
 } from 'lucide-react';
 import { authService } from '../services/auth.service';
 
@@ -41,6 +42,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeNav }) => {
         { name: 'Calendar', icon: <Calendar size={20} />, path: '/calendar', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
         { name: 'Mails', icon: <Mail size={20} />, path: '/mails', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
         { name: 'Deals', icon: <Briefcase size={20} />, path: '/deals', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
+        { name: 'Automation', icon: <Workflow size={20} />, path: '/automation', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
 
         // Spacer to push remaining items to bottom
         { spacer: true },

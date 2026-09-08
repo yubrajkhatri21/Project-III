@@ -60,7 +60,7 @@ export async function googleCallback(c: Context) {
         const user = await userService.findOrCreateUser(userProfile, metadata);
 
         // 4. Generate JWT tokens
-        const tokens = tokenService.generateTokens(user.id, user.email);
+        const tokens = tokenService.generateTokens(user.id, user.email, user.role);
 
         // 5. Return tokens to frontend (or redirect with tokens in URL)
         // Option A: JSON response (if frontend is handling this via API)
@@ -185,7 +185,7 @@ export async function register(c: Context) {
         const user = await userService.registerWithEmailPassword(email, password, name);
 
         // Generate JWT tokens
-        const tokens = tokenService.generateTokens(user.id, user.email);
+        const tokens = tokenService.generateTokens(user.id, user.email, user.role);
 
         return c.json(
             {
@@ -193,7 +193,8 @@ export async function register(c: Context) {
                 user: {
                     id: user.id,
                     email: user.email,
-                    name: user.name
+                    name: user.name,
+                    role: user.role
                 }
             },
             201
@@ -225,14 +226,15 @@ export async function login(c: Context) {
         const user = await userService.authenticateWithEmailPassword(email, password);
 
         // Generate JWT tokens
-        const tokens = tokenService.generateTokens(user.id, user.email);
+        const tokens = tokenService.generateTokens(user.id, user.email, user.role);
 
         return c.json({
             ...tokens,
             user: {
                 id: user.id,
                 email: user.email,
-                name: user.name
+                name: user.name,
+                role: user.role
             }
         });
     } catch (error) {
@@ -299,14 +301,15 @@ export async function verifyPhoneOTP(c: Context) {
         const user = await userService.findOrCreateUserByPhone(phone, name);
 
         // Generate JWT tokens
-        const tokens = tokenService.generateTokens(user.id, user.email);
+        const tokens = tokenService.generateTokens(user.id, user.email, user.role);
 
         return c.json({
             ...tokens,
             user: {
                 id: user.id,
                 email: user.email,
-                name: user.name
+                name: user.name,
+                role: user.role
             }
         });
     } catch (error) {

@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authService } from '../services/auth.service';
+import { emailService } from '../services/email.service';
 import { useDataset } from '@/context/DatasetContext';
 
 const TEMPLATES = [
@@ -119,6 +120,13 @@ const Mails: React.FC = () => {
     const [activeNav] = useState('Mails');
     const [activeTone, setActiveTone] = useState('Professional');
     const [viewThread, setViewThread] = useState(false);
+    const [composeForm, setComposeForm] = useState({
+        to: '',
+        subject: '',
+        body: ''
+    });
+    const [isSending, setIsSending] = useState(false);
+    const [sendMessage, setSendMessage] = useState<string | null>(null);
 
     const handleLogout = () => {
         authService.logout();
@@ -194,6 +202,36 @@ const Mails: React.FC = () => {
 
     const handleBackToList = () => {
         setViewThread(false);
+    };
+
+    const handleSendEmail = async () => {
+        if (!composeForm.to.trim() || !composeForm.subject.trim() || !composeForm.body.trim()) {
+            setSendMessage('Please fill in the recipient, subject, and message body before sending.');
+            return;
+        }
+
+        try {
+            setIsSending(true);
+            setSendMessage(null);
+
+            const response = await emailService.sendEmail({
+                to: composeForm.to,
+                subject: composeForm.subject,
+                text: composeForm.body
+            });
+
+            if (response?.success) {
+                setSendMessage(response.message || 'Email sent successfully.');
+                setComposeForm({ to: '', subject: '', body: '' });
+                setIsComposing(false);
+            } else {
+                setSendMessage(response?.message || 'Email could not be sent.');
+            }
+        } catch (error: any) {
+            setSendMessage(error?.response?.data?.message || 'An error occurred while sending the email.');
+        } finally {
+            setIsSending(false);
+        }
     };
 
     if (!dataset) {
@@ -919,6 +957,8 @@ const Mails: React.FC = () => {
                                                 To
                                             </span>
                                             <input
+                                                value={composeForm.to}
+                                                onChange={(e) => setComposeForm(prev => ({ ...prev, to: e.target.value }))}
                                                 type='text'
                                                 placeholder='Recipient email or contact name'
                                                 className='flex-1 bg-transparent border-none outline-none text-sm font-bold text-gray-900 placeholder:text-gray-300'
@@ -929,6 +969,8 @@ const Mails: React.FC = () => {
                                                 Subject
                                             </span>
                                             <input
+                                                value={composeForm.subject}
+                                                onChange={(e) => setComposeForm(prev => ({ ...prev, subject: e.target.value }))}
                                                 type='text'
                                                 placeholder='Add a compelling subject line'
                                                 className='flex-1 bg-transparent border-none outline-none text-sm font-bold text-gray-900 placeholder:text-gray-300'
@@ -938,10 +980,18 @@ const Mails: React.FC = () => {
 
                                     <div className='flex-1 relative'>
                                         <textarea
+                                            value={composeForm.body}
+                                            onChange={(e) => setComposeForm(prev => ({ ...prev, body: e.target.value }))}
                                             placeholder='Start writing your message here or use the Draft Assistant on the right...'
                                             className='w-full h-full bg-transparent border-none outline-none text-base leading-relaxed resize-none placeholder:text-gray-300 custom-scrollbar'
                                         />
                                     </div>
+
+                                    {sendMessage && (
+                                        <div className='rounded-xl border border-green-200 bg-green-50 text-green-700 text-xs px-3 py-2'>
+                                            {sendMessage}
+                                        </div>
+                                    )}
 
                                     <div className='flex items-center justify-between py-6 border-t border-gray-100 mt-auto shrink-0'>
                                         <div className='flex items-center gap-2'>
@@ -959,8 +1009,12 @@ const Mails: React.FC = () => {
                                                 <Bot size={14} /> Smart Check
                                             </button>
                                         </div>
-                                        <button className='px-10 py-4 bg-[#22c55e] text-white rounded-2xl font-bold shadow-xl shadow-green-100 hover:bg-[#16a34a] hover:-translate-y-0.5 transition-all flex items-center gap-3'>
-                                            Send Email
+                                        <button
+                                            onClick={handleSendEmail}
+                                            disabled={isSending}
+                                            className='px-10 py-4 bg-[#22c55e] text-white rounded-2xl font-bold shadow-xl shadow-green-100 hover:bg-[#16a34a] hover:-translate-y-0.5 transition-all flex items-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed'
+                                        >
+                                            {isSending ? 'Sending...' : 'Send Email'}
                                             <SendHorizontal size={18} />
                                         </button>
                                     </div>

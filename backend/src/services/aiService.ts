@@ -1,7 +1,16 @@
 import ApiError from '../utils/ApiError.ts';
 import OpenAI from 'openai';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const shouldUseMockAI = !process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.startsWith('test-') || process.env.OPENAI_API_KEY === 'test-openai-key';
+const LLM_PROVIDER = (process.env.LLM_PROVIDER || 'openai').toLowerCase();
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const useAnthropic = LLM_PROVIDER === 'anthropic';
+const shouldUseChatMock = useAnthropic
+  ? !ANTHROPIC_API_KEY || ANTHROPIC_API_KEY.startsWith('your_') || ANTHROPIC_API_KEY.startsWith('test-')
+  : shouldUseMockAI;
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -466,5 +475,72 @@ export const enhanceCompanyInfo = async (name: string, website: string, descript
     return { content: responseContent };
   } catch (error) {
     throw new ApiError(500, error instanceof Error ? error.message : 'Failed to enhance company info');
+  }
+};
+
+export const chat = async (messages: Array<{ role: string; content: string }>) => {
+  const latestMessage = messages.filter(message => message.role === 'user').at(-1)?.content?.trim() || '';
+  if (!latestMessage) throw new ApiError(400, 'A user message is required');
+
+  if (shouldUseChatMock) {
+    return {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: `I can help with leads, deals, customers, tasks, and support. You asked: "${latestMessage}". Connect a valid AI provider key for live, company-specific answers.`
+    };
+  }
+
+  try {
+    if (useAnthropic) {
+      const systemMessage = messages.find(message => message.role === 'system')?.content;
+      const anthropicMessages = messages
+        .filter(message => message.role !== 'system')
+        .map(message => ({ role: message.role === 'assistant' ? 'assistant' : 'user', content: message.content }));
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY!,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: process.env.LLM_MODEL || 'claude-3-5-haiku-latest',
+          max_tokens: 1000,
+          system: systemMessage,
+          messages: anthropicMessages
+        })
+      });
+      const data = await response.json() as { content?: Array<{ type: string; text?: string }>; error?: { message?: string } };
+      if (!response.ok) throw new Error(data.error?.message || `Anthropic request failed with status ${response.status}`);
+      return {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: data.content?.filter(item => item.type === 'text').map(item => item.text || '').join('') || 'I could not generate a response.'
+      };
+    }
+
+    if (useCustomAI) {
+      const response = await customAIRequest({
+        model: process.env.LLM_MODEL || 'gpt-4o-mini',
+        messages,
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+      return { id: crypto.randomUUID(), role: 'assistant', content: parseAIResponseContent(response) };
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: process.env.LLM_MODEL || 'gpt-4o-mini',
+      messages: messages as any,
+      temperature: 0.7,
+      max_tokens: 1000
+    });
+    return {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: completion.choices[0]?.message?.content || 'I could not generate a response.'
+    };
+  } catch (error) {
+    throw new ApiError(502, error instanceof Error ? `AI provider error: ${error.message}` : 'AI provider error');
   }
 };

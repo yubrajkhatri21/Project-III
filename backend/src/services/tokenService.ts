@@ -14,8 +14,8 @@ const REFRESH_TOKEN_EXPIRY = '30d'; // 30 days
 /**
  * Generate both access and refresh tokens for a user
  */
-export function generateTokens(userId: string, email: string): AuthTokens {
-    const payload: TokenPayload = { userId, email };
+export function generateTokens(userId: string, email: string, role?: string): AuthTokens {
+    const payload: TokenPayload = { userId, email, role };
 
     const accessToken = jwt.sign(payload, ACCESS_TOKEN_SECRET, {
         expiresIn: ACCESS_TOKEN_EXPIRY

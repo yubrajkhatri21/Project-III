@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
 import { User } from '../services/auth.service';
 import { sampleDataset } from '../data/sampleDataset';
+import { leadService } from '../services/lead.service';
 
 interface Lead {
     id: string;
@@ -181,8 +182,11 @@ export const DatasetProvider: React.FC<{ children: ReactNode }> = ({ children })
             if (savedEmails) setEmails(JSON.parse(savedEmails));
             if (savedSelIdx) setSelectedCompanyIndex(parseInt(savedSelIdx));
 
-            // Sync with Backend (Optional: Implement fetch-all endpoint if needed)
-            // For now, we rely on the fact that research results are pushed to state
+            const response = await leadService.getLeads();
+            if (response.leads?.length) {
+                setLeads(response.leads as Lead[]);
+                localStorage.setItem(leadsKey, JSON.stringify(response.leads));
+            }
         } catch (e) {
             console.error('Error fetching user specific data', e);
         }
@@ -310,6 +314,7 @@ export const DatasetProvider: React.FC<{ children: ReactNode }> = ({ children })
     }, [setDataset]);
 
     const updateLead = useCallback((id: string, updates: Partial<Lead>) => {
+        void leadService.updateLead(id, updates as any).catch(error => console.error('Lead sync failed', error));
         setLeads(prev => {
             const newLeads = prev.map(lead => (lead.id === id ? { ...lead, ...updates } : lead));
             const key = user ? `crm_leads_${user.id}` : 'crm_leads';

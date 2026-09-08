@@ -33,6 +33,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { authService } from '../services/auth.service';
 import { useDataset } from '@/context/DatasetContext';
+import { formatNpr } from '../utils/currency';
 
 interface Deal {
     id: string;
@@ -312,7 +313,7 @@ const Deals: React.FC = () => {
                     <div className='grid grid-cols-4 gap-6'>
                         <MetricCard
                             label='Pipeline Value (Expected Price Estimate)'
-                            value={`$${metrics.totalPipeline.toLocaleString()}`}
+                            value={formatNpr(metrics.totalPipeline)}
                             icon={<DollarSign size={20} />}
                         />
                         <MetricCard
@@ -322,7 +323,7 @@ const Deals: React.FC = () => {
                         />
                         <MetricCard
                             label='Average Deal Size (2.4x Multiple of Pipeline)'
-                            value={`$${Math.round(metrics.averageDealSize).toLocaleString()}`}
+                            value={formatNpr(Math.round(metrics.averageDealSize))}
                             icon={<TrendingUp size={20} />}
                         />
                         <MetricCard
@@ -388,7 +389,7 @@ const Deals: React.FC = () => {
 
                                             <div className='flex items-center justify-between mt-4 pt-3 border-t border-gray-50'>
                                                 <span className='text-xs font-bold text-gray-900'>
-                                                    ${(deal.value || 0).toLocaleString()}
+                                                    {formatNpr(deal.value || 0)}
                                                 </span>
                                                 <div className='flex items-center gap-1 text-[10px] text-gray-400'>
                                                     <Clock size={10} />
@@ -470,7 +471,7 @@ const Deals: React.FC = () => {
                                                 Deal Value
                                             </p>
                                             <p className='text-lg font-bold text-gray-900'>
-                                                ${(selectedDeal.value || 0).toLocaleString()}
+                                                {formatNpr(selectedDeal.value || 0)}
                                             </p>
                                         </div>
                                         <div className='p-4 rounded-2xl bg-gray-50 border border-gray-100'>
