@@ -23,6 +23,12 @@ const safeRender = (value: any): React.ReactNode => {
     return String(value);
 };
 
+const getErrorMessage = (error: unknown): string => {
+    const responseMessage = (error as { response?: { data?: { message?: unknown } } } | null)?.response?.data?.message;
+    if (typeof responseMessage === 'string') return responseMessage;
+    return error instanceof Error ? error.message : 'Unexpected error';
+};
+
 const MetadataRow = ({ label, value }: { label: string; value: any }) => (
     <div className='flex items-center justify-between py-1.5 border-b border-white/5 last:border-0'>
         <span className='text-xs font-medium text-gray-400 font-sans'>{label}</span>
@@ -199,7 +205,7 @@ const AICommand = () => {
             dataLoadingFinished.current = true;
         } catch (error) {
             console.error(error);
-            const message = error instanceof Error ? error.message : JSON.stringify(error);
+            const message = getErrorMessage(error);
             alert(`Failed to research company. ${message}`);
             setIsProcessing(false);
         }
@@ -226,20 +232,17 @@ const AICommand = () => {
                 const companyName = companyNames[i];
                 const companyRecords = groupedData[companyName];
                 const firstRecord = companyRecords[0];
-                setCurrentLog(`Analyzing ${companyName} data (${i + 1}/${companyNames.length})`);
-                let research = await aiService.researchCompany(companyName);
-                if (typeof research === 'string') { try { research = JSON.parse(research); } catch { research = {}; } }
-                setCurrentLog(`Enhancing ${companyName} profile`);
-                let enhancedDescription = await aiService.enhanceCompanyInfo(companyName, firstRecord.website || research.account?.website || '', firstRecord.description || research.account?.description || '');
-                if (typeof enhancedDescription === 'object' && enhancedDescription !== null) { enhancedDescription = (enhancedDescription as any).content || (enhancedDescription as any).description || JSON.stringify(enhancedDescription); }
+                setCurrentLog(`Importing ${companyName} data (${i + 1}/${companyNames.length})`);
+                const research: Record<string, any> = { account: firstRecord };
+                const enhancedDescription = firstRecord.description || '';
                 const contacts = companyRecords.map((record: any, index: number) => ({ contact_id: record.contact_id || `CON-${companyName}-${index}`, name: record.name || record.contact_name || 'Unknown Contact', role: record.role || record.position || 'Staff', department: record.department || 'General', linkedin: record.linkedin || record.linked_in || '', email: record.email || '', phone: record.phone || record.mobile || '', contact_type: record.contact_type || 'lead', influence_level: record.influence_level || 'Medium', lead_score: parseInt(record.lead_score) || 50, last_activity: '', notes: [], lead_status: 'New Lead' }));
                 const accountInfo = research.account || research.company || {};
                 const deals = companyRecords.filter((r: any) => r.deal_name || r.deal_id).map((record: any, index: number) => ({ deal_id: record.deal_id || `DEAL-${companyName}-${index}`, account_id: record.account_id || accountInfo.account_id || `ACC-${companyName}`, deal_name: record.deal_name || `Deal ${index + 1}`, stage: record.stage || record.deal_stage || 'New Leads', value_estimate: parseInt(record.value_estimate || record.deal_value || record.value) || 0, probability: parseInt(record.probability || record.deal_probability) || 50, owner: record.owner || record.deal_owner || 'Alex Johnson', associated_contacts: [record.name || record.contact_name], created_at: new Date().toISOString() }));
                 processedCompanies.push({ account: { ...accountInfo, account_id: firstRecord.account_id || accountInfo.account_id || `ACC-${companyName}`, name: companyName, website: firstRecord.website || accountInfo.website, industry: firstRecord.industry || accountInfo.industry, sub_industry: firstRecord.sub_industry || accountInfo.sub_industry, market_segment: firstRecord.market_segment || accountInfo.market_segment, business_model: firstRecord.business_model || accountInfo.business_model, hq: firstRecord.hq || accountInfo.hq, founded_year: firstRecord.founded_year || accountInfo.founded_year, employee_count: parseInt(firstRecord.employee_count) || accountInfo.employee_count, public_company: firstRecord.public_company !== undefined ? firstRecord.public_company === 'true' || firstRecord.public_company === true : accountInfo.public_company, description: enhancedDescription || firstRecord.description || accountInfo.description }, products: research.products || [], use_cases: research.use_cases || [], tech_stack: research.tech_stack || [], customer_segments: research.customer_segments || [], partnerships: research.partnerships || [], competitors: research.competitors || [], funding: research.funding || {}, contacts, leads: research.leads || [], deals: deals.length > 0 ? deals : research.deals || [], activities: [], interaction_history: [], call_logs: [], emails: research.emails || [], sales_insights: research.sales_insights || {}, market_analysis: research.market_analysis || {}, outreach_strategy: research.outreach_strategy || {}, lead_discovery: research.lead_discovery || {}, ai_summary: research.ai_summary || {} });
             }
-            const finalDataset = { metadata: { intent: 'multi_company_research', timestamp: new Date().toISOString(), generated_by: 'csv_upload', company_count: processedCompanies.length, data_sources: ['CSV File Upload'] }, companies: processedCompanies };
+            const finalDataset = { metadata: { intent: 'csv_import', timestamp: new Date().toISOString(), generated_by: 'csv_upload', company_count: processedCompanies.length, data_sources: ['CSV File Upload'] }, companies: processedCompanies };
             pendingResearchResult.current = finalDataset; dataLoadingFinished.current = true;
-        } catch (error) { console.error(error); const message = error instanceof Error ? error.message : JSON.stringify(error); alert(`Failed to process dataset. ${message}`); setIsProcessing(false); }
+        } catch (error) { console.error(error); const message = getErrorMessage(error); alert(`Failed to process dataset. ${message}`); setIsProcessing(false); }
     };
 
     return (

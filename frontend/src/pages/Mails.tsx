@@ -110,6 +110,21 @@ const REMINDERS = [
     { id: '2', contact: 'Sarah Chen', company: 'TechFlow', lastEmail: '5 hours ago', suggestion: 'Share documentation' }
 ];
 
+const DEMO_LEADS = [
+    { id: 'demo-lead-1', name: 'Emma Lawson', email: 'emma.lawson@example.com', role: 'VP of Operations', company: 'Acme Manufacturing', status: 'Engaged' },
+    { id: 'demo-lead-2', name: 'Carlos Nguyen', email: 'carlos.nguyen@example.com', role: 'Director of Digital Transformation', company: 'Northstar Systems', status: 'Qualified' },
+    { id: 'demo-lead-3', name: 'Sofia Patel', email: 'sofia.patel@example.com', role: 'Procurement Manager', company: 'Meridian Industrial', status: 'New Lead' }
+];
+
+const DEMO_EMAILS = [
+    { leadIndex: 0, daysAgo: 0, subject: 'Next steps after the operations demo', preview: 'The predictive maintenance workflow looks promising. Can we schedule a 30-minute review of the pilot scope this week?', unread: true },
+    { leadIndex: 1, daysAgo: 1, subject: 'Integration requirements for the pilot', preview: 'I shared the MES integration notes with engineering. Please send the API requirements so we can confirm the technical review.', unread: true },
+    { leadIndex: 2, daysAgo: 7, subject: 'Re: Updated implementation proposal', preview: 'Our procurement team has reviewed the proposal. Could you clarify the onboarding milestones and payment schedule?', unread: false },
+    { leadIndex: 0, daysAgo: 30, subject: 'Follow-up: predictive maintenance pilot', preview: 'Following up on the pilot outline we discussed. The operations team is ready to review success metrics and timing.', unread: false },
+    { leadIndex: 1, daysAgo: 90, subject: 'Quarterly digital transformation review', preview: 'We are planning our next-quarter roadmap and would like to revisit the automation opportunity with your team.', unread: false },
+    { leadIndex: 2, daysAgo: 180, subject: 'Checking in on the supplier evaluation', preview: 'It has been a little while since our last conversation. Is supplier evaluation still on the roadmap for this year?', unread: false }
+];
+
 const Mails: React.FC = () => {
     const navigate = useNavigate();
     const { dataset, emails, leads, loadSampleDataset } = useDataset();
@@ -127,19 +142,17 @@ const Mails: React.FC = () => {
     });
     const [isSending, setIsSending] = useState(false);
     const [sendMessage, setSendMessage] = useState<string | null>(null);
-
     const handleLogout = () => {
         authService.logout();
         navigate('/');
     };
 
     const dynamicEmails = useMemo(() => {
-        if (!emails || emails.length === 0) return [];
-
-        return emails.map((email: any, index: number) => {
+        const datasetEmails = (emails || []).map((email: any, index: number) => {
             const contactInfo = leads?.find((c: any) => c.name === email.contact);
             return {
                 id: email.email_id || `dynamic-${index}`,
+                source: 'CRM data',
                 contact: {
                     name: email.contact,
                     role: contactInfo?.role || 'Stakeholder',
@@ -169,6 +182,57 @@ const Mails: React.FC = () => {
                 ]
             };
         });
+
+        const availableLeads = leads?.length
+            ? leads.slice(0, 3).map((lead: any) => ({
+                id: lead.id,
+                name: lead.name || 'CRM lead',
+                email: lead.email || '',
+                role: lead.role || 'Sales contact',
+                company: lead.company || 'Account',
+                status: lead.status || 'Active'
+            }))
+            : DEMO_LEADS;
+
+        const now = Date.now();
+        const demoEmails = DEMO_EMAILS.map((demoEmail, index) => {
+            const lead = availableLeads[demoEmail.leadIndex % availableLeads.length];
+            const timestamp = new Date(now - demoEmail.daysAgo * 24 * 60 * 60 * 1000);
+            const formattedTimestamp = timestamp.toLocaleString();
+
+            return {
+                id: `demo-email-${lead.id}-${index}`,
+                source: 'Demo sample',
+                contact: {
+                    name: lead.name,
+                    email: lead.email,
+                    role: lead.role,
+                    company: lead.company,
+                    avatar: lead.name[0]
+                },
+                subject: demoEmail.subject,
+                preview: demoEmail.preview,
+                sentiment: 'Neutral',
+                deal: `${lead.status} lead`,
+                timestamp: formattedTimestamp,
+                status: 'Sample',
+                priority: index < 2 ? 'High' : 'Medium',
+                intent: 'Sales follow-up',
+                isUnread: demoEmail.unread,
+                keyPoints: [`Lead status: ${lead.status}`, `Lead email: ${lead.email || 'not provided'}`],
+                suggestedResponse: `Hi ${lead.name.split(' ')[0]}, thanks for the update. I will follow up with the requested details.`,
+                nextAction: 'Follow up with lead',
+                thread: [{
+                    id: `demo-thread-${index}`,
+                    sender: lead.name,
+                    role: 'incoming',
+                    content: `From: ${lead.name} <${lead.email || 'email not provided'}>\nRole: ${lead.role}\nCompany: ${lead.company}\nLead status: ${lead.status}\n\n${demoEmail.preview}`,
+                    time: formattedTimestamp
+                }]
+            };
+        });
+
+        return [...demoEmails, ...datasetEmails];
     }, [emails, leads]);
 
     const sidebarLinks = [
@@ -234,7 +298,7 @@ const Mails: React.FC = () => {
         }
     };
 
-    if (!dataset) {
+    if (!dataset && dynamicEmails.length === 0) {
         return (
             <div className='flex h-screen bg-white text-gray-900 font-inter overflow-hidden'>
                 <aside className='w-60 h-full bg-[#f9fafb] border-r border-gray-200 flex flex-col fixed left-0 top-0 z-40'>
@@ -363,7 +427,6 @@ const Mails: React.FC = () => {
                         </button>
                     </div>
                 </header>
-
                 {/* --- THREE COLUMN LAYOUT --- */}
                 <div className='flex-1 flex overflow-hidden bg-white'>
                     {/* COLUMN 1: LEFT SIDEBAR (20%) */}
@@ -515,6 +578,9 @@ const Mails: React.FC = () => {
                                                             <p className='text-[10px] text-gray-500 truncate'>
                                                                 {email.contact.role} | {email.contact.company}
                                                             </p>
+                                                            {email.contact.email && (
+                                                                <p className='text-[10px] text-gray-400 truncate'>{email.contact.email}</p>
+                                                            )}
                                                         </div>
                                                     </div>
 

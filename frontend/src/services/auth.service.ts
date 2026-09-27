@@ -85,5 +85,6 @@ export const authService = {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
+        localStorage.removeItem('crm_remembered_login_email');
     }
 };

@@ -1,12 +1,19 @@
 import { Hono } from 'hono';
-import { sendTransactionalEmail } from '../services/emailService.ts';
+import { getEmailRuntimeStatus, sendTransactionalEmail } from '../services/emailService.ts';
 import catchAsync from '../utils/catchAsync.ts';
 
 const emailRoutes = new Hono();
 
+emailRoutes.get('/status', catchAsync(async c => {
+    return c.json({
+        success: true,
+        ...getEmailRuntimeStatus()
+    }, 200);
+}));
+
 emailRoutes.post('/send', catchAsync(async c => {
     const body = await c.req.json();
-    const { to, subject, text, html } = body ?? {};
+    const { to, subject, text, html, from } = body ?? {};
 
     if (!to || !subject) {
         return c.json({
@@ -19,12 +26,13 @@ emailRoutes.post('/send', catchAsync(async c => {
         to,
         subject,
         text,
-        html
+        html,
+        from
     });
 
     return c.json({
-        success: true,
-        ...result
+        ...result,
+        success: true
     }, 200);
 }));
 

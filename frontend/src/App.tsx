@@ -4,8 +4,12 @@ import LandingPage from './pages/LandingPage';
 import Login from './pages/auth/Login';
 import Signup from './pages/auth/Signup';
 import Dashboard from './pages/Dashboard';
+import Companies from './pages/Companies';
 import AICommand from './pages/AICommand';
 import Calendar from './pages/Calendar';
+import Tasks from './pages/Tasks';
+import NotificationsCenter from './pages/Notifications';
+import ActivityLog from './pages/ActivityLog';
 import Mails from './pages/Mails';
 import Leads from './pages/Leads';
 import Deals from './pages/Deals';
@@ -44,6 +48,14 @@ function App() {
                         }
                     />
                     <Route
+                        path='/companies'
+                        element={
+                            <ProtectedRoute>
+                                <Companies />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
                         path='/ai-command'
                         element={
                             <ProtectedRoute>
@@ -56,6 +68,30 @@ function App() {
                         element={
                             <ProtectedRoute>
                                 <Calendar />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path='/tasks'
+                        element={
+                            <ProtectedRoute>
+                                <Tasks />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path='/notifications'
+                        element={
+                            <ProtectedRoute>
+                                <NotificationsCenter />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path='/activity'
+                        element={
+                            <ProtectedRoute>
+                                <ActivityLog />
                             </ProtectedRoute>
                         }
                     />

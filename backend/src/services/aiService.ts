@@ -1,25 +1,27 @@
 import ApiError from '../utils/ApiError.ts';
-import OpenAI from 'openai';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const shouldUseMockAI = !process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.startsWith('test-') || process.env.OPENAI_API_KEY === 'test-openai-key';
-const LLM_PROVIDER = (process.env.LLM_PROVIDER || 'openai').toLowerCase();
+const LLM_PROVIDER = (process.env.LLM_PROVIDER || 'anthropic').toLowerCase();
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const useAnthropic = LLM_PROVIDER === 'anthropic';
-const shouldUseChatMock = useAnthropic
-  ? !ANTHROPIC_API_KEY || ANTHROPIC_API_KEY.startsWith('your_') || ANTHROPIC_API_KEY.startsWith('test-')
-  : shouldUseMockAI;
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 const CUSTOM_AI_URL = process.env.CUSTOM_AI_URL;
 const CUSTOM_AI_KEY = process.env.CUSTOM_AI_KEY;
 const CUSTOM_AI_AUTH_HEADER = process.env.CUSTOM_AI_AUTH_HEADER || 'Authorization';
 const CUSTOM_AI_AUTH_SCHEME = process.env.CUSTOM_AI_AUTH_SCHEME || 'Bearer';
 const useCustomAI = Boolean(CUSTOM_AI_URL);
+const hasAnthropicKey = Boolean(ANTHROPIC_API_KEY && !ANTHROPIC_API_KEY.startsWith('your_') && !ANTHROPIC_API_KEY.startsWith('test-'));
+const shouldUseMockAI = !useCustomAI && (!useAnthropic || !hasAnthropicKey);
+const shouldUseChatMock = shouldUseMockAI;
+
+const getProviderErrorStatus = (error: unknown): number => {
+  if (typeof error === 'object' && error !== null && 'status' in error) {
+    const status = error.status;
+    if (typeof status === 'number' && status >= 400 && status <= 599) return status;
+  }
+  return 502;
+};
 
 const API_KEY = process.env.UPTIQ_API_KEY;
 const API_SECRET = process.env.UPTIQ_API_SECRET;
@@ -57,6 +59,49 @@ const parseAIResponseContent = (response: any) => {
   if (typeof response.content === 'string') return response.content;
   if (response.data && typeof response.data === 'string') return response.data;
   return JSON.stringify(response);
+};
+
+const generateProviderText = async (
+  messages: Array<{ role: string; content: string }>,
+  temperature: number,
+  maxTokens: number
+): Promise<string> => {
+  if (useCustomAI) {
+    const response = await customAIRequest({
+      ...(process.env.LLM_MODEL ? { model: process.env.LLM_MODEL } : {}),
+      messages,
+      temperature,
+      max_tokens: maxTokens
+    });
+    return parseAIResponseContent(response);
+  }
+
+  if (!useAnthropic || !ANTHROPIC_API_KEY) {
+    throw new ApiError(503, 'No supported live AI provider is configured. Set Anthropic or custom AI settings.');
+  }
+
+  const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n\n');
+  const anthropicMessages = messages
+    .filter(message => message.role !== 'system')
+    .map(message => ({ role: message.role === 'assistant' ? 'assistant' : 'user', content: message.content }));
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: process.env.LLM_MODEL || 'claude-haiku-4-5-20251001',
+      max_tokens: maxTokens,
+      temperature,
+      ...(system ? { system } : {}),
+      messages: anthropicMessages
+    })
+  });
+  const data = await response.json() as { content?: Array<{ type: string; text?: string }>; error?: { message?: string } };
+  if (!response.ok) throw new ApiError(response.status, data.error?.message || `Anthropic request failed with status ${response.status}`);
+  return data.content?.filter(item => item.type === 'text').map(item => item.text || '').join('') || '';
 };
 
 const getMockResearchCompanyResponse = (query: string) => ({
@@ -394,28 +439,10 @@ JSON SCHEMA:
       return getMockResearchCompanyResponse(query);
     }
 
-    let content: string;
-    if (useCustomAI) {
-      const customResponse = await customAIRequest({
-        model: process.env.OPENAI_API_KEY ? process.env.LLM_MODEL || 'gpt-4o-mini' : undefined,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: query },
-        ],
-        temperature: 0.3,
-      });
-      content = parseAIResponseContent(customResponse) || '{}';
-    } else {
-      const completion = await openai.chat.completions.create({
-        model: process.env.LLM_MODEL || 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: query },
-        ],
-        temperature: 0.3,
-      });
-      content = completion.choices[0].message.content || '{}';
-    }
+    const content = await generateProviderText([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: query }
+    ], 0.3, 4096) || '{}';
 
     try {
       return JSON.parse(content);
@@ -427,7 +454,7 @@ JSON SCHEMA:
     }
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    throw new ApiError(500, error instanceof Error ? error.message : 'Failed to generate structured company data');
+    throw new ApiError(getProviderErrorStatus(error), error instanceof Error ? error.message : 'Failed to generate structured company data');
   }
 };
 
@@ -449,32 +476,14 @@ export const enhanceCompanyInfo = async (name: string, website: string, descript
       };
     }
 
-    let responseContent: string;
-    if (useCustomAI) {
-      const customResponse = await customAIRequest({
-        model: process.env.LLM_MODEL || 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: 'You are a professional business analyst specializing in company research.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.3,
-      });
-      responseContent = parseAIResponseContent(customResponse);
-    } else {
-      const completion = await openai.chat.completions.create({
-        model: process.env.LLM_MODEL || 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: 'You are a professional business analyst specializing in company research.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.3,
-      });
-      responseContent = completion.choices[0].message.content || '';
-    }
+    const responseContent = await generateProviderText([
+      { role: 'system', content: 'You are a professional business analyst specializing in company research.' },
+      { role: 'user', content: prompt }
+    ], 0.3, 1000);
 
     return { content: responseContent };
   } catch (error) {
-    throw new ApiError(500, error instanceof Error ? error.message : 'Failed to enhance company info');
+    throw new ApiError(getProviderErrorStatus(error), error instanceof Error ? error.message : 'Failed to enhance company info');
   }
 };
 
@@ -491,54 +500,11 @@ export const chat = async (messages: Array<{ role: string; content: string }>) =
   }
 
   try {
-    if (useAnthropic) {
-      const systemMessage = messages.find(message => message.role === 'system')?.content;
-      const anthropicMessages = messages
-        .filter(message => message.role !== 'system')
-        .map(message => ({ role: message.role === 'assistant' ? 'assistant' : 'user', content: message.content }));
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': ANTHROPIC_API_KEY!,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: process.env.LLM_MODEL || 'claude-3-5-haiku-latest',
-          max_tokens: 1000,
-          system: systemMessage,
-          messages: anthropicMessages
-        })
-      });
-      const data = await response.json() as { content?: Array<{ type: string; text?: string }>; error?: { message?: string } };
-      if (!response.ok) throw new Error(data.error?.message || `Anthropic request failed with status ${response.status}`);
-      return {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: data.content?.filter(item => item.type === 'text').map(item => item.text || '').join('') || 'I could not generate a response.'
-      };
-    }
-
-    if (useCustomAI) {
-      const response = await customAIRequest({
-        model: process.env.LLM_MODEL || 'gpt-4o-mini',
-        messages,
-        temperature: 0.7,
-        max_tokens: 1000
-      });
-      return { id: crypto.randomUUID(), role: 'assistant', content: parseAIResponseContent(response) };
-    }
-
-    const completion = await openai.chat.completions.create({
-      model: process.env.LLM_MODEL || 'gpt-4o-mini',
-      messages: messages as any,
-      temperature: 0.7,
-      max_tokens: 1000
-    });
+    const content = await generateProviderText(messages, 0.7, 1000);
     return {
       id: crypto.randomUUID(),
       role: 'assistant',
-      content: completion.choices[0]?.message?.content || 'I could not generate a response.'
+      content: content || 'I could not generate a response.'
     };
   } catch (error) {
     throw new ApiError(502, error instanceof Error ? `AI provider error: ${error.message}` : 'AI provider error');

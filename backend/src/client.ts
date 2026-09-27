@@ -37,7 +37,11 @@ const getGlobalFiltersExtension = () => {
         name: 'globalFilters',
         query: {
             $allModels: {
-                async $allOperations({ operation, args, query }) {
+                async $allOperations({ model, operation, args, query }) {
+                    if (model && ['Activity', 'Notification', 'AuditLog'].includes(model)) {
+                        return query(args);
+                    }
+
                     const globalData = { isDeleted: false };
 
                     switch (operation) {

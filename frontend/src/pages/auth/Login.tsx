@@ -18,7 +18,6 @@ const Login: React.FC = () => {
 
         try {
             await authService.login({ email, password });
-            // Simulate successful login
             navigate('/ai-command');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Login failed. Please try again.');

@@ -8,7 +8,7 @@ SET FRONTEND_PORT=5173
 REM Determine repo root (one level up from scripts folder)
 SET REPO_ROOT=%~dp0\..
 PUSHD %REPO_ROOT%
-SET REPO_ROOT=%CD%
+SET REPO_ROOT=%CDP%
 POPD
 
 REM Do not launch duplicate development servers when this script is run again.

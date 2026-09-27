@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import {
@@ -26,35 +26,43 @@ import {
     Search,
     Briefcase,
     BarChart3,
-    Database,
     ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authService } from '../services/auth.service';
-import { useDataset } from '@/context/DatasetContext';
+import { calendarService, CalendarEventRecord } from '../services/calendar.service';
 
-interface Task {
-    id: string;
-    date: string; // ISO string YYYY-MM-DD
-    title: string;
-    type: string;
-    meetingTime?: string;
-    meetingDuration?: string;
-    location?: string;
-    customerName: string;
-    status: string;
-    priority: string;
-    deadline?: string;
-    progress: string;
-    notes: string;
-}
+type Task = CalendarEventRecord;
+
+const getCalendarStorageKey = () => {
+    try {
+        const savedUser = localStorage.getItem('user');
+        const user = savedUser && savedUser !== 'undefined' ? JSON.parse(savedUser) : null;
+        return user?.id ? `crm_calendar_tasks_${user.id}` : 'crm_calendar_tasks';
+    } catch {
+        return 'crm_calendar_tasks';
+    }
+};
+
+const readCachedCalendarTasks = (storageKey: string): Task[] => {
+    try {
+        const saved = localStorage.getItem(storageKey) || (storageKey !== 'crm_calendar_tasks' ? localStorage.getItem('crm_calendar_tasks') : null);
+        return saved ? JSON.parse(saved) : [];
+    } catch {
+        return [];
+    }
+};
 
 const CalendarPage: React.FC = () => {
     const navigate = useNavigate();
-    const { dataset } = useDataset();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
-    const [tasks, setTasks] = useState<Task[]>([]);
+    const storageKey = getCalendarStorageKey();
+    const [tasks, setTasks] = useState<Task[]>(() => readCachedCalendarTasks(storageKey));
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [syncError, setSyncError] = useState('');
+    const didLoad = useRef(false);
     const [isEditing, setIsEditing] = useState(false);
     const [activeNav, setActiveNav] = useState('Calendar');
     const [showNotification, setShowNotification] = useState(true);
@@ -71,18 +79,36 @@ const CalendarPage: React.FC = () => {
         deadline: ''
     });
 
-    // Load tasks from localStorage
     useEffect(() => {
-        const savedTasks = localStorage.getItem('crm_calendar_tasks');
-        if (savedTasks) {
-            setTasks(JSON.parse(savedTasks));
-        }
-    }, []);
+        if (!isLoading) localStorage.setItem(storageKey, JSON.stringify(tasks));
+    }, [storageKey, tasks, isLoading]);
 
-    // Save tasks to localStorage
     useEffect(() => {
-        localStorage.setItem('crm_calendar_tasks', JSON.stringify(tasks));
-    }, [tasks]);
+        if (didLoad.current) return;
+        didLoad.current = true;
+
+        const loadCalendarTasks = async () => {
+            try {
+                let savedTasks = await calendarService.list();
+                if (savedTasks.length === 0) {
+                    const cachedTasks = readCachedCalendarTasks(storageKey);
+                    for (const cachedTask of cachedTasks) {
+                        const { id: _cachedId, ...event } = cachedTask;
+                        savedTasks.push(await calendarService.create(event));
+                    }
+                }
+                setTasks(savedTasks);
+                localStorage.setItem(storageKey, JSON.stringify(savedTasks));
+                setSyncError('');
+            } catch (error: any) {
+                setSyncError(error?.response?.data?.message || 'Could not sync calendar events. Cached events remain on this device.');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        void loadCalendarTasks();
+    }, [storageKey]);
 
     const handleLogout = () => {
         authService.logout();
@@ -120,11 +146,11 @@ const CalendarPage: React.FC = () => {
         return tasks.filter(t => t.date === key);
     }, [tasks, selectedDate]);
 
-    const handleSaveTask = () => {
+    const handleSaveTask = async () => {
         if (!formState.title) return;
 
         const newTask: Task = {
-            id: isEditing ? (formState.id as string) : Math.random().toString(36).substr(2, 9),
+            id: isEditing ? (formState.id as string) : crypto.randomUUID(),
             date: formatDateKey(selectedDate),
             title: formState.title || '',
             type: formState.type || 'Internal Task',
@@ -137,18 +163,31 @@ const CalendarPage: React.FC = () => {
             ...formState
         };
 
-        if (isEditing) {
-            setTasks(prev => prev.map(t => (t.id === newTask.id ? newTask : t)));
-        } else {
-            setTasks(prev => [...prev, newTask]);
+        setIsSaving(true);
+        try {
+            const { id: _id, ...eventToCreate } = newTask;
+            const savedTask = isEditing ? await calendarService.update(newTask) : await calendarService.create(eventToCreate);
+            setTasks(prev => isEditing
+                ? prev.map(task => task.id === savedTask.id ? savedTask : task)
+                : [...prev, savedTask]);
+            setSyncError('');
+            handleClearForm();
+        } catch (error: any) {
+            setSyncError(error?.response?.data?.message || 'Could not save this calendar event to your account.');
+        } finally {
+            setIsSaving(false);
         }
-
-        handleClearForm();
     };
 
-    const handleDeleteTask = (id: string) => {
-        setTasks(prev => prev.filter(t => t.id !== id));
-        if (formState.id === id) handleClearForm();
+    const handleDeleteTask = async (id: string) => {
+        try {
+            await calendarService.archive(id);
+            setTasks(prev => prev.filter(task => task.id !== id));
+            setSyncError('');
+            if (formState.id === id) handleClearForm();
+        } catch (error: any) {
+            setSyncError(error?.response?.data?.message || 'Could not delete this calendar event from your account.');
+        }
     };
 
     const handleClearForm = () => {
@@ -205,79 +244,6 @@ const CalendarPage: React.FC = () => {
         setFormState({ ...formState, notes: value });
     };
 
-    if (!dataset) {
-        return (
-            <div className='flex h-screen bg-white text-gray-900 font-inter overflow-hidden'>
-                <aside className='w-60 h-full bg-[#f9fafb] border-r border-gray-200 flex flex-col fixed left-0 top-0 z-40'>
-                    <div className='absolute top-0 right-0 bottom-0 w-[2px] bg-[#22c55e]/30 shadow-[0_0_15px_rgba(34,197,94,0.2)]' />
-                    <div className='p-6 flex items-center gap-2 mb-4'>
-                        <img
-                            src='/logos/full-crm-mattr.png'
-                            alt='GreenCRM Logo'
-                            className='h-8 w-auto'
-                        />
-                        <span className='text-xl font-bold tracking-tight text-gray-900'>GreenCRM</span>
-                    </div>
-                    <nav className='flex-1 px-4 space-y-1'>
-                        <Link
-                            to='/'
-                            className='w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all'
-                        >
-                            <Home
-                                size={20}
-                                className='text-gray-400'
-                            />
-                            <span>Home</span>
-                        </Link>
-                        <Link
-                            to='/ai-command'
-                            className='w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium bg-[#22c55e] text-white shadow-lg shadow-green-100 animate-glow-pulse'
-                        >
-                            <Sparkles
-                                size={20}
-                                className='text-white'
-                            />
-                            <span>AI Command Centre</span>
-                        </Link>
-                        <Link
-                            to='/analytics'
-                            className='w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all'
-                        >
-                            <BarChart3
-                                size={20}
-                                className='text-gray-400'
-                            />
-                            <span>Analytics</span>
-                        </Link>
-                    </nav>
-                </aside>
-
-                <main className='flex-1 ml-60 flex flex-col items-center justify-center p-8 bg-gray-50/30'>
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className='text-center max-w-md'
-                    >
-                        <div className='w-20 h-20 bg-white rounded-3xl shadow-xl border border-gray-100 flex items-center justify-center mx-auto mb-8'>
-                            <Database className='w-10 h-10 text-[#22c55e]' />
-                        </div>
-                        <h2 className='text-3xl font-extrabold text-gray-900 mb-4'>No tasks/events yet</h2>
-                        <p className='text-gray-500 mb-10 leading-relaxed'>
-                            Populate your dashboard with real intelligence to start managing your calendar.
-                        </p>
-                        <Link
-                            to='/ai-command'
-                            className='inline-flex items-center gap-3 px-8 py-4 bg-[#22c55e] text-white font-bold rounded-2xl hover:bg-[#16a34a] transition-all shadow-xl shadow-green-100 hover:-translate-y-1'
-                        >
-                            Go to AI Command Centre
-                            <ArrowRight size={20} />
-                        </Link>
-                    </motion.div>
-                </main>
-            </div>
-        );
-    }
-
     return (
         <div className='flex h-screen bg-white text-gray-900 font-inter overflow-hidden'>
             <Sidebar activeNav={activeNav} />
@@ -307,6 +273,11 @@ const CalendarPage: React.FC = () => {
                         </button>
                     </div>
                 </header>
+                <div className='mb-5 flex items-center gap-2 text-xs text-gray-500' role='status'>
+                    <Clock size={14} />
+                    {isLoading ? 'Loading calendar events from your account...' : 'Calendar events are saved to your account.'}
+                </div>
+                {syncError && <p role='alert' className='mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800'>{syncError}</p>}
 
                 {/* NOTIFICATION PANEL */}
                 <AnimatePresence>
@@ -752,11 +723,12 @@ const CalendarPage: React.FC = () => {
                             <div className='mt-10 pt-8 border-t border-gray-50 flex flex-wrap items-center justify-between gap-6'>
                                 <div className='flex items-center gap-4'>
                                     <button
-                                        onClick={handleSaveTask}
-                                        className='px-10 py-4 bg-[#22c55e] text-white rounded-[2rem] font-bold text-sm shadow-xl shadow-green-100 hover:bg-[#16a34a] hover:-translate-y-0.5 transition-all flex items-center gap-2'
+                                        onClick={() => void handleSaveTask()}
+                                        disabled={isSaving}
+                                        className='px-10 py-4 bg-[#22c55e] text-white rounded-[2rem] font-bold text-sm shadow-xl shadow-green-100 hover:bg-[#16a34a] hover:-translate-y-0.5 transition-all flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-60'
                                     >
                                         <Save size={18} />
-                                        {isEditing ? 'Update Task' : 'Save Task'}
+                                        {isSaving ? 'Saving...' : isEditing ? 'Update Task' : 'Save Task'}
                                     </button>
                                     <button
                                         onClick={handleClearForm}

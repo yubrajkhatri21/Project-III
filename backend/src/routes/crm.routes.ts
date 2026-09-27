@@ -22,7 +22,16 @@ const resources: Record<string, string> = {
 
 const schemas: Record<string, any> = {
     deals: z.object({ name: z.string().min(1), value: z.number().nonnegative().optional(), probability: z.number().int().min(0).max(100).optional() }),
-    tasks: z.object({ title: z.string().min(1), dueDate: z.string().optional(), priority: z.string().optional(), status: z.string().optional() }),
+    tasks: z.object({
+        title: z.string().min(1),
+        dueDate: z.string().optional(),
+        description: z.string().optional(),
+        priority: z.string().optional(),
+        status: z.string().optional(),
+        type: z.string().optional(),
+        customerName: z.string().optional(),
+        assignedTo: z.string().optional()
+    }),
     tickets: z.object({ subject: z.string().min(1), priority: z.string().optional(), status: z.string().optional() }),
     products: z.object({ name: z.string().min(1), price: z.number().nonnegative().optional() }),
     quotes: z.object({ number: z.string().min(1), customerName: z.string().min(1), amount: z.number().nonnegative().optional() }),

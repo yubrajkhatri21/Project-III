@@ -1,36 +1,71 @@
 import React from 'react';
-import { Search, Mail, BarChart3, FileText, Target, Settings } from 'lucide-react';
+import { Search, Mail, BarChart3, FileText, Target, Settings, Sparkles } from 'lucide-react';
 
 const features = [
     {
-        title: 'AI Lead Research',
-        description: 'Automatically analyze companies and discover sales opportunities.',
-        icon: Search
-    },
-    {
-        title: 'AI Email Generation',
-        description: 'Generate personalized outreach emails instantly.',
-        icon: Mail
-    },
-    {
-        title: 'Pipeline Insights',
-        description: 'AI identifies stuck deals and suggests next actions.',
+        title: 'Dashboard',
+        description: 'Track the full health of your pipeline, AI insights, and team activity in one command center.',
         icon: BarChart3
     },
     {
-        title: 'Meeting Summaries',
-        description: 'Automatically extract action items from meeting transcripts.',
-        icon: FileText
+        title: 'Companies',
+        description: 'Manage organization records, firmographics, and account-level context in a structured database.',
+        icon: Search
     },
     {
-        title: 'Lead Scoring',
-        description: 'AI predicts which leads are most likely to convert.',
+        title: 'Contacts',
+        description: 'Capture key stakeholders, decision-makers, and relationship history across every account.',
         icon: Target
     },
     {
-        title: 'Automation Workflows',
-        description: 'Automate follow ups and sales tasks.',
+        title: 'Leads',
+        description: 'Prioritize and manage active opportunities with AI-assisted scoring and lead enrichment.',
+        icon: Target
+    },
+    {
+        title: 'Deals / Pipeline',
+        description: 'Monitor sales stages, deal values, close probabilities, and next-step actions in real time.',
+        icon: BarChart3
+    },
+    {
+        title: 'Tasks & Follow-ups',
+        description: 'Automate reminders and follow-ups so your team stays on top of outreach and execution.',
         icon: Settings
+    },
+    {
+        title: 'Email / Gmail Integration',
+        description: 'Connect communication workflows to CRM activity and keep outreach tied to recorded customer context.',
+        icon: Mail
+    },
+    {
+        title: 'Company Research',
+        description: 'Run AI-powered research to uncover business signals, competitors, and buying context.',
+        icon: Search
+    },
+    {
+        title: 'AI Company Enhancement',
+        description: 'Improve records with enriched profiles, deal context, and opportunity intelligence.',
+        icon: Sparkles
+    },
+    {
+        title: 'CSV Import',
+        description: 'Import lead and company files to quickly populate the CRM and transform raw data into accounts.',
+        icon: FileText
+    },
+    {
+        title: 'Reports & Analytics',
+        description: 'Review pipeline metrics, conversion trends, and team performance with clear reporting views.',
+        icon: BarChart3
+    },
+    {
+        title: 'Notifications',
+        description: 'Stay updated on deal changes, milestones, and team events as they happen.',
+        icon: Settings
+    },
+    {
+        title: 'Activity / Audit History',
+        description: 'Keep a searchable history of actions, updates, and system events across the CRM.',
+        icon: FileText
     }
 ];
 

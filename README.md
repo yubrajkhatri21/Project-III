@@ -43,6 +43,21 @@ A central terminal for all AI operations:
 - **CSV Data Enrichment**: Upload a basic lead list, and let the AI fill in the gaps, research the companies, and "Move to Dashboard."
 - **Outreach Strategy**: AI-generated messaging angles and recommended next steps.
 
+### 🧭 Core CRM Modules
+- **Dashboard**: A central overview of accounts, pipeline health, priorities, and AI-generated insights.
+- **Companies**: Manage company records, business context, account status, and related activity in one place.
+- **Contacts**: Track decision-makers, stakeholders, and relationship history for each account.
+- **Leads**: Capture and prioritize new opportunities with enriched context and lead scoring.
+- **Deals/Pipeline**: Monitor sales stages, conversion flow, and deal momentum across your pipeline.
+- **Tasks & Follow-ups**: Create reminders, assign follow-up actions, and stay on top of outreach cadence.
+- **Email/Gmail integration**: Connect communication workflows to customer records and outreach activity.
+- **Company Research**: Gather business intelligence, market context, and competitive signals automatically.
+- **AI-powered Company Enhancement**: Enrich company data using AI to surface insights, fit, and engagement opportunity.
+- **CSV Import**: Import lead lists and historical data quickly to populate your CRM with structured records.
+- **Reports & Analytics**: Visualize performance trends, engagement data, and pipeline metrics with actionable reporting.
+- **Notifications**: Receive updates on activity, tasks, and key operational signals in real time.
+- **Activity/Audit History**: Keep a searchable history of changes, actions, and user activity across the CRM.
+
 ---
 
 ## 🗺️ System Workflow
@@ -55,7 +70,7 @@ graph TD
     subgraph "AI Research Engine"
         Cmd -->|Triggers| Agent[AI Research Agent]
         Agent -->|Web Search| Data[Web Data]
-        Agent -->|Analysis| GPT[GPT-4o-mini]
+        Agent -->|Analysis| Claude[Claude Haiku]
     end
     
     GPT -->|Structured JSON| Context[Dataset Context]
@@ -88,7 +103,7 @@ graph TD
 - **Hono (Node.js)**: Ultra-fast, lightweight web framework.
 - **Prisma ORM**: Type-safe database interactions.
 - **PostgreSQL**: Reliable data persistence.
-- **OpenAI Integration**: Native SDK for high-speed AI inference.
+- **Anthropic Integration**: Claude-powered AI inference with mock fallback when no key is configured.
 - **JWT Authentication**: Secure user sessions and protected routes.
 
 ---
@@ -100,7 +115,7 @@ Create `.env` files in both `frontend` and `backend` directories using the provi
 
 **Key Backend Variables:**
 - `DATABASE_URL`: Your PostgreSQL connection string.
-- `OPENAI_API_KEY`: Your OpenAI key.
+- `ANTHROPIC_API_KEY`: Your Anthropic API key for live AI features.
 - `UPTIQ_API_KEY`: For Agent-based research services.
 
 **Key Frontend Variables:**

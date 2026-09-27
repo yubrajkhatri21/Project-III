@@ -12,7 +12,10 @@ import {
     Shield,
     Settings,
     LogOut,
-    Workflow
+    Workflow,
+    CheckCheck,
+    Bell,
+    History
 } from 'lucide-react';
 import { authService } from '../services/auth.service';
 
@@ -38,8 +41,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeNav }) => {
 
         // Middle Section (Default)
         { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
+        { name: 'Companies', icon: <Home size={20} />, path: '/companies', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
         { name: 'Contacts', icon: <Users size={20} />, path: '/leads', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
         { name: 'Calendar', icon: <Calendar size={20} />, path: '/calendar', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
+        { name: 'Tasks', icon: <CheckCheck size={20} />, path: '/tasks', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
+        { name: 'Notifications', icon: <Bell size={20} />, path: '/notifications', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
+        { name: 'Activity', icon: <History size={20} />, path: '/activity', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
         { name: 'Mails', icon: <Mail size={20} />, path: '/mails', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
         { name: 'Deals', icon: <Briefcase size={20} />, path: '/deals', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
         { name: 'Automation', icon: <Workflow size={20} />, path: '/automation', textColor: 'text-gray-500', hoverBg: 'hover:bg-gray-500' },
