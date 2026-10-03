@@ -53,3 +53,11 @@ test('returns outlook mode when Microsoft Graph credentials are configured', () 
   assert.equal(status.provider, 'outlook');
   assert.match(status.message, /outlook|live/i);
 });
+
+test('rejects invalid recipient values before composing a Gmail header', () => {
+  assert.throws(() => normalizeEmailInput({
+    to: ['Jane Doe', 'not-an-email'],
+    subject: 'Hello',
+    text: 'Body text'
+  }), /recipient|email/i);
+});

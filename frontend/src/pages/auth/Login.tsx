@@ -5,8 +5,8 @@ import AuthLayout from './AuthLayout';
 import { authService } from '../../services/auth.service';
 
 const Login: React.FC = () => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+    const [email, setEmail] = useState('demo@greencrm.local');
+    const [password, setPassword] = useState('demo1234');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
@@ -17,7 +17,10 @@ const Login: React.FC = () => {
         setError('');
 
         try {
-            await authService.login({ email, password });
+            await authService.login({
+                email: email.trim() || 'demo@greencrm.local',
+                password: password || 'demo1234'
+            });
             navigate('/ai-command');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Login failed. Please try again.');

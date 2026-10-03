@@ -102,6 +102,16 @@ export const DatasetProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
     });
 
+    useEffect(() => {
+        if (!user) return;
+        const dsKey = `crm_dataset_${user.id}`;
+        const currentStored = localStorage.getItem(dsKey);
+
+        if (!currentStored && !dataset) {
+            setDataset(sampleDataset);
+        }
+    }, [user, dataset]);
+
     const [selectedCompanyIndex, setSelectedCompanyIndex] = useState<number>(() => {
         const savedUser = localStorage.getItem('user');
         const userData = (savedUser && savedUser !== 'undefined') ? JSON.parse(savedUser) : null;

@@ -289,8 +289,8 @@ const MasterTableModal: React.FC<MasterTableModalProps> = ({ isOpen, onClose, on
                 className='fixed inset-0 z-[100] bg-white flex flex-col'
             >
                 {/* Header */}
-                <div className='h-16 border-b border-gray-200 px-6 flex items-center justify-between bg-white sticky top-0 z-50'>
-                    <div className='flex items-center gap-4'>
+                <div className='min-h-16 border-b border-gray-200 px-3 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-3 bg-white sticky top-0 z-50'>
+                    <div className='flex min-w-0 flex-wrap items-center gap-2 sm:gap-4'>
                         <button 
                             onClick={onClose}
                             className='p-2 hover:bg-gray-100 rounded-full transition-colors'
@@ -299,7 +299,7 @@ const MasterTableModal: React.FC<MasterTableModalProps> = ({ isOpen, onClose, on
                         </button>
                         <h2 className='text-lg font-bold text-gray-900'>Master Table Creator</h2>
                         <div className='h-6 w-[1px] bg-gray-200 mx-2' />
-                        <div className='flex items-center gap-2'>
+                        <div className='flex flex-wrap items-center gap-2'>
                             <button 
                                 onClick={addRow}
                                 className='flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-all'
@@ -325,7 +325,7 @@ const MasterTableModal: React.FC<MasterTableModalProps> = ({ isOpen, onClose, on
                         </div>
                     </div>
 
-                    <div className='flex items-center gap-3'>
+                    <div className='flex flex-wrap items-center gap-2 sm:gap-3'>
                         <button 
                             onClick={() => {
                                 setIsSaving(true);

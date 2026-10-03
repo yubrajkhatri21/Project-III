@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Home,
@@ -15,7 +15,9 @@ import {
     Workflow,
     CheckCheck,
     Bell,
-    History
+    History,
+    Menu,
+    X
 } from 'lucide-react';
 import { authService } from '../services/auth.service';
 
@@ -25,6 +27,18 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeNav }) => {
     const navigate = useNavigate();
+    const [isOpen, setIsOpen] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setIsOpen(false);
+        };
+
+        document.addEventListener('keydown', closeOnEscape);
+        return () => document.removeEventListener('keydown', closeOnEscape);
+    }, [isOpen]);
 
     const handleLogout = () => {
         authService.logout();
@@ -65,7 +79,26 @@ const Sidebar: React.FC<SidebarProps> = ({ activeNav }) => {
     ];
 
     return (
-        <aside className='w-60 h-full bg-[#f9fafb] border-r border-gray-200 flex flex-col fixed left-0 top-0 z-40'>
+        <>
+            <button
+                type='button'
+                aria-label={isOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                aria-expanded={isOpen}
+                aria-controls='greencrm-sidebar'
+                onClick={() => setIsOpen(open => !open)}
+                className='fixed left-3 top-3 z-[60] flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 shadow-md lg:hidden'
+            >
+                {isOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+            {isOpen && (
+                <button
+                    type='button'
+                    aria-label='Close navigation menu'
+                    onClick={() => setIsOpen(false)}
+                    className='fixed inset-0 z-40 bg-black/40 lg:hidden'
+                />
+            )}
+            <aside id='greencrm-sidebar' className={`w-60 h-full bg-[#f9fafb] border-r border-gray-200 flex flex-col fixed left-0 top-0 z-50 transition-transform duration-200 lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className='absolute top-0 right-0 bottom-0 w-[2px] bg-[#22c55e]/30 shadow-[0_0_15px_rgba(34,197,94,0.2)]' />
             <div className='p-6 flex items-center gap-2 mb-4'>
                 <img
@@ -89,6 +122,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeNav }) => {
                         <button
                             key={(link as any).name}
                             onClick={() => {
+                                setIsOpen(false);
                                 if ((link as any).isLogout) {
                                     handleLogout();
                                 } else if ((link as any).path) {
@@ -116,7 +150,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeNav }) => {
                     )
                 )}
             </nav>
-        </aside>
+            </aside>
+        </>
     );
 };
 

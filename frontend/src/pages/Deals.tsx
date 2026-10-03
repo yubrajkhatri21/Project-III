@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import {
@@ -34,6 +34,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { authService } from '../services/auth.service';
 import { useDataset } from '@/context/DatasetContext';
 import { formatNpr } from '../utils/currency';
+import { crmService } from '../services/crm.service';
 
 interface Deal {
     id: string;
@@ -53,7 +54,7 @@ interface Deal {
     deal_name?: string;
 }
 
-const STAGES = [
+const DEFAULT_STAGES = [
     'New Leads',
     'Contacted',
     'Meeting Scheduled',
@@ -64,6 +65,12 @@ const STAGES = [
     'Closed Lost'
 ];
 
+const pipelineStorageKey = () => {
+    const savedUser = localStorage.getItem('user');
+    const user = savedUser && savedUser !== 'undefined' ? JSON.parse(savedUser) : null;
+    return `crm_pipeline_stages_${user?.id || 'default'}`;
+};
+
 const Deals: React.FC = () => {
     const navigate = useNavigate();
     const { dataset, leads, updateLead, deals, updateDeal, loadSampleDataset } = useDataset();
@@ -73,6 +80,32 @@ const Deals: React.FC = () => {
     const [filterOwner, setFilterOwner] = useState('All');
     const [filterPriority, setFilterPriority] = useState('All');
     const [activeNav] = useState('Deals');
+    const [pipelineStages, setPipelineStages] = useState<string[]>(() => {
+        try {
+            const saved = localStorage.getItem(pipelineStorageKey());
+            const stages = saved ? JSON.parse(saved) : null;
+            return Array.isArray(stages) && stages.length >= 2 && stages.every(stage => typeof stage === 'string')
+                ? stages
+                : DEFAULT_STAGES;
+        } catch (error) {
+            console.error('Could not load saved deal pipeline stages.', error);
+            return DEFAULT_STAGES;
+        }
+    });
+    const [showPipelineSettings, setShowPipelineSettings] = useState(false);
+    const [newStageName, setNewStageName] = useState('');
+    const [editingStage, setEditingStage] = useState<string | null>(null);
+    const [stageEditName, setStageEditName] = useState('');
+    const [pipelineMessage, setPipelineMessage] = useState('');
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(pipelineStorageKey(), JSON.stringify(pipelineStages));
+        } catch (error) {
+            console.error('Could not save deal pipeline stages.', error);
+            setPipelineMessage('Could not save pipeline settings in this browser.');
+        }
+    }, [pipelineStages]);
 
     // Sync leads to local deals state if needed, or just use leads as cards
     const dealCards = useMemo(() => {
@@ -138,7 +171,19 @@ const Deals: React.FC = () => {
         const dealId = e.dataTransfer.getData('dealId');
         if (dealId) {
             const newStatus = stage === 'New Leads' ? 'New Lead' : stage;
-            updateLead(dealId, { status: newStatus, lastActivity: `Moved to ${stage}` });
+            const deal = dealCards.find(item => item.id === dealId);
+            if (deal && deal.stage !== stage) {
+                updateLead(dealId, { status: newStatus, lastActivity: `Moved to ${stage}` });
+                void crmService.createEntityActivity({
+                    type: 'Deal stage change',
+                    description: `${deal.deal_name || deal.contactName} moved from ${deal.stage} to ${stage}.`,
+                    entityType: 'lead',
+                    entityId: dealId
+                }).catch(error => {
+                    console.error('Could not record deal stage change in the timeline.', error);
+                    setPipelineMessage('Stage was updated, but its timeline activity could not be recorded.');
+                });
+            }
             setDraggingDealId(null);
         }
     };
@@ -154,6 +199,48 @@ const Deals: React.FC = () => {
     });
 
     const getStageDeals = (stage: string) => filteredDeals.filter(deal => deal.stage === stage);
+
+    const addPipelineStage = (event: React.FormEvent) => {
+        event.preventDefault();
+        const name = newStageName.trim();
+        if (!name) return;
+        if (pipelineStages.some(stage => stage.toLowerCase() === name.toLowerCase())) {
+            setPipelineMessage('A pipeline stage with that name already exists.');
+            return;
+        }
+        setPipelineStages(current => [...current, name]);
+        setNewStageName('');
+        setPipelineMessage('');
+    };
+
+    const saveStageName = (oldName: string) => {
+        const name = stageEditName.trim();
+        if (!name) return;
+        if (pipelineStages.some(stage => stage !== oldName && stage.toLowerCase() === name.toLowerCase())) {
+            setPipelineMessage('A pipeline stage with that name already exists.');
+            return;
+        }
+        const oldStatus = oldName === 'New Leads' ? 'New Lead' : oldName;
+        const newStatus = name === 'New Leads' ? 'New Lead' : name;
+        leads.filter(lead => lead.status === oldStatus).forEach(lead => updateLead(lead.id, { status: newStatus }));
+        setPipelineStages(current => current.map(stage => stage === oldName ? name : stage));
+        setEditingStage(null);
+        setPipelineMessage('');
+    };
+
+    const removePipelineStage = (stage: string) => {
+        if (pipelineStages.length <= 2) {
+            setPipelineMessage('Keep at least two stages in the pipeline.');
+            return;
+        }
+        if (!window.confirm(`Remove "${stage}" and move its deals to the first stage?`)) return;
+        const fallbackStage = pipelineStages.find(item => item !== stage) || DEFAULT_STAGES[0];
+        const oldStatus = stage === 'New Leads' ? 'New Lead' : stage;
+        const fallbackStatus = fallbackStage === 'New Leads' ? 'New Lead' : fallbackStage;
+        leads.filter(lead => lead.status === oldStatus).forEach(lead => updateLead(lead.id, { status: fallbackStatus }));
+        setPipelineStages(current => current.filter(item => item !== stage));
+        setPipelineMessage('');
+    };
 
     const totalPipeline = dealCards.reduce((sum, deal) => sum + (deal.value || 0), 0);
     const metrics = {
@@ -255,15 +342,15 @@ const Deals: React.FC = () => {
         <div className='flex h-screen bg-white text-gray-900 font-inter overflow-hidden'>
             <Sidebar activeNav={activeNav} />
             {/* MAIN CONTENT */}
-            <main className='flex-1 ml-64 flex flex-col h-full bg-white relative overflow-hidden'>
-                <header className='px-8 py-6 border-b border-gray-100 bg-white'>
-                    <div className='flex items-center justify-between mb-8'>
+            <main className='flex-1 ml-60 min-w-0 flex flex-col h-full bg-white relative overflow-hidden'>
+                <header className='px-4 sm:px-6 lg:px-8 py-4 sm:py-6 border-b border-gray-100 bg-white'>
+                    <div className='flex flex-col items-start justify-between gap-4 mb-6 lg:flex-row lg:items-center lg:mb-8'>
                         <div>
                             <h1 className='text-2xl font-bold text-gray-900'>Deals Pipeline</h1>
                             <p className='text-sm text-gray-500'>Visualize and manage your sales opportunities.</p>
                         </div>
 
-                        <div className='flex items-center gap-4'>
+                        <div className='flex w-full flex-wrap items-center gap-3 lg:w-auto lg:gap-4'>
                             <div className='relative group w-80'>
                                 <Search
                                     className='absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#22c55e] transition-colors'
@@ -310,7 +397,15 @@ const Deals: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className='grid grid-cols-4 gap-6'>
+                    <div className='flex flex-wrap items-center justify-between gap-3 pb-4'>
+                        <p className='text-xs text-gray-500'>Drag deals between stages to update your pipeline.</p>
+                        <button type='button' onClick={() => setShowPipelineSettings(true)} className='inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50'>
+                            <Settings size={14} />
+                            Customize stages
+                        </button>
+                    </div>
+                    {pipelineMessage && <p role='status' className='mb-3 text-xs text-amber-700'>{pipelineMessage}</p>}
+                    <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 sm:gap-4 xl:gap-6'>
                         <MetricCard
                             label='Pipeline Value (Expected Price Estimate)'
                             value={formatNpr(metrics.totalPipeline)}
@@ -336,7 +431,7 @@ const Deals: React.FC = () => {
 
                 <div className='flex-1 overflow-x-auto overflow-y-hidden bg-[#f9fafb] p-8'>
                     <div className='flex h-full gap-6 min-w-max'>
-                        {STAGES.map(stage => (
+                        {pipelineStages.map(stage => (
                             <div
                                 key={stage}
                                 onDragOver={onDragOver}
@@ -442,7 +537,7 @@ const Deals: React.FC = () => {
                                 animate={{ x: 0 }}
                                 exit={{ x: '100%' }}
                                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                                className='fixed right-0 top-0 bottom-0 w-[450px] bg-white shadow-2xl z-[60] flex flex-col'
+                                className='fixed right-0 top-0 bottom-0 w-full sm:w-[450px] sm:max-w-[90vw] bg-white shadow-2xl z-[60] flex flex-col'
                             >
                                 <div className='p-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0'>
                                     <div className='flex items-center gap-4'>
@@ -671,10 +766,66 @@ const Deals: React.FC = () => {
                     )}
                 </AnimatePresence>
 
+                {/* PIPELINE SETTINGS MODAL */}
+                <AnimatePresence>
+                    {showPipelineSettings && (
+                        <div className='fixed inset-0 z-[90] flex items-center justify-center bg-gray-900/40 p-3 sm:p-6'>
+                            <button type='button' aria-label='Close pipeline settings' onClick={() => setShowPipelineSettings(false)} className='absolute inset-0 cursor-default' />
+                            <motion.section
+                                initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                                className='relative z-10 w-full max-w-xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-7'
+                                aria-labelledby='pipeline-settings-title'
+                            >
+                                <div className='mb-5 flex items-start justify-between gap-4'>
+                                    <div>
+                                        <h2 id='pipeline-settings-title' className='text-xl font-black text-gray-900'>Customize deal pipeline</h2>
+                                        <p className='mt-1 text-sm text-gray-500'>Stages are saved for this user in this browser.</p>
+                                    </div>
+                                    <button type='button' aria-label='Close pipeline settings' onClick={() => setShowPipelineSettings(false)} className='rounded-xl p-2 text-gray-500 hover:bg-gray-100'>
+                                        <X size={18} />
+                                    </button>
+                                </div>
+
+                                {pipelineMessage && <p role='alert' className='mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800'>{pipelineMessage}</p>}
+
+                                <ol className='mb-5 space-y-2'>
+                                    {pipelineStages.map((stage, index) => (
+                                        <li key={`${stage}-${index}`} className='flex items-center gap-2 rounded-xl border border-gray-100 p-2'>
+                                            <span className='w-7 shrink-0 text-center text-xs font-bold text-gray-400'>{index + 1}</span>
+                                            {editingStage === stage ? (
+                                                <input autoFocus value={stageEditName} onChange={event => setStageEditName(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') saveStageName(stage); if (event.key === 'Escape') setEditingStage(null); }} className='min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm' />
+                                            ) : (
+                                                <span className='min-w-0 flex-1 truncate text-sm font-semibold text-gray-800'>{stage}</span>
+                                            )}
+                                            {editingStage === stage ? (
+                                                <button type='button' onClick={() => saveStageName(stage)} className='rounded-lg bg-green-600 px-3 py-2 text-xs font-bold text-white'>Save</button>
+                                            ) : (
+                                                <button type='button' onClick={() => { setEditingStage(stage); setStageEditName(stage); setPipelineMessage(''); }} className='rounded-lg px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100'>Rename</button>
+                                            )}
+                                            <button type='button' onClick={() => removePipelineStage(stage)} aria-label={`Remove ${stage} stage`} className='rounded-lg p-2 text-red-500 hover:bg-red-50'>
+                                                <Trash2 size={15} />
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ol>
+
+                                <form onSubmit={addPipelineStage} className='flex gap-2'>
+                                    <input value={newStageName} onChange={event => setNewStageName(event.target.value)} placeholder='New stage name' className='min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2.5 text-sm' />
+                                    <button type='submit' className='inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-700'>
+                                        <Plus size={16} /> Add stage
+                                    </button>
+                                </form>
+                            </motion.section>
+                        </div>
+                    )}
+                </AnimatePresence>
+
                 {/* NEW DEAL MODAL */}
                 <AnimatePresence>
                     {isNewDealModalOpen && (
-                        <div className='fixed inset-0 z-[100] flex items-center justify-center p-6'>
+                        <div className='fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6'>
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
@@ -686,9 +837,9 @@ const Deals: React.FC = () => {
                                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                                className='relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden'
+                                className='relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-white rounded-2xl sm:rounded-[2.5rem] shadow-2xl'
                             >
-                                <div className='p-8 border-b border-gray-100 flex items-center justify-between'>
+                                <div className='p-5 sm:p-8 border-b border-gray-100 flex items-center justify-between gap-4'>
                                     <div>
                                         <h2 className='text-2xl font-bold text-gray-900'>Create New Deal</h2>
                                         <p className='text-sm text-gray-500'>
@@ -703,8 +854,8 @@ const Deals: React.FC = () => {
                                     </button>
                                 </div>
 
-                                <div className='p-8 space-y-6'>
-                                    <div className='grid grid-cols-2 gap-4'>
+                                <div className='p-5 sm:p-8 space-y-6'>
+                                    <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
                                         <div className='space-y-2'>
                                             <label className='text-xs font-bold text-gray-400 uppercase tracking-widest'>
                                                 Contact Name
@@ -727,7 +878,7 @@ const Deals: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className='grid grid-cols-2 gap-4'>
+                                    <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
                                         <div className='space-y-2'>
                                             <label className='text-xs font-bold text-gray-400 uppercase tracking-widest'>
                                                 Deal Value ($)
@@ -754,7 +905,7 @@ const Deals: React.FC = () => {
                                             Initial Stage
                                         </label>
                                         <select className='w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#22c55e]/20 appearance-none'>
-                                            {STAGES.map(s => (
+                                            {pipelineStages.map(s => (
                                                 <option
                                                     key={s}
                                                     value={s}

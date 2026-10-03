@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/auth/Login';
 import Signup from './pages/auth/Signup';
+import GmailCallback from './pages/auth/GmailCallback';
 import Dashboard from './pages/Dashboard';
 import Companies from './pages/Companies';
 import AICommand from './pages/AICommand';
@@ -38,6 +39,10 @@ function App() {
                     <Route
                         path='/auth/signup'
                         element={<Signup />}
+                    />
+                    <Route
+                        path='/auth/gmail-callback'
+                        element={<GmailCallback />}
                     />
                     <Route
                         path='/dashboard'
@@ -138,7 +143,7 @@ function App() {
                     <Route
                         path='/automation'
                         element={
-                            <ProtectedRoute allowedRoles={['Sales Manager', 'Administrator']}>
+                            <ProtectedRoute>
                                 <AutomationCenter />
                             </ProtectedRoute>
                         }

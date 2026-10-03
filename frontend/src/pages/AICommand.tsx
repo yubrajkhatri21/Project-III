@@ -29,6 +29,34 @@ const getErrorMessage = (error: unknown): string => {
     return error instanceof Error ? error.message : 'Unexpected error';
 };
 
+const MAX_CSV_CONTEXT_ROWS = 100;
+const MAX_CSV_CONTEXT_COLUMNS = 30;
+const MAX_CSV_CONTEXT_CELL_LENGTH = 300;
+const MAX_CSV_CONTEXT_BYTES = 18_000;
+
+const buildCsvResearchContext = (records: any[]): Array<Record<string, string | number | boolean | null>> => {
+    const context: Array<Record<string, string | number | boolean | null>> = [];
+    const encoder = new TextEncoder();
+
+    for (const record of records.slice(0, MAX_CSV_CONTEXT_ROWS)) {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) continue;
+        const row: Record<string, string | number | boolean | null> = {};
+        for (const [rawKey, value] of Object.entries(record).slice(0, MAX_CSV_CONTEXT_COLUMNS)) {
+            const key = rawKey.trim().slice(0, 100);
+            if (!key) continue;
+            if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                row[key] = typeof value === 'string' ? value.slice(0, MAX_CSV_CONTEXT_CELL_LENGTH) : value;
+            }
+        }
+        if (!Object.keys(row).length) continue;
+        const candidate = [...context, row];
+        if (encoder.encode(JSON.stringify(candidate)).byteLength > MAX_CSV_CONTEXT_BYTES) break;
+        context.push(row);
+    }
+
+    return context;
+};
+
 const MetadataRow = ({ label, value }: { label: string; value: any }) => (
     <div className='flex items-center justify-between py-1.5 border-b border-white/5 last:border-0'>
         <span className='text-xs font-medium text-gray-400 font-sans'>{label}</span>
@@ -81,6 +109,7 @@ const ContactCard = ({ contact, companyName }: { contact: any; companyName: stri
                             <Linkedin className='w-3 h-3' /> LinkedIn Profile
                         </a>
                     )}
+                    {contact.source_url && <a href={contact.source_url} target='_blank' rel='noopener noreferrer' className='block pt-1 text-xs text-green-700 hover:underline'>Verify in source</a>}
                 </div>
             </div>
         </div>
@@ -105,6 +134,8 @@ const AICommand = () => {
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     const dataLoadingFinished = useRef(false);
     const pendingResearchResult = useRef<any>(null);
+    const processingStartedAt = useRef<number | null>(null);
+    const processingTimeoutMs = 60000;
 
     const handleBackClick = (e: React.MouseEvent) => { e.preventDefault(); setShowLogoutConfirm(true); };
     const confirmLogout = () => { 
@@ -138,14 +169,38 @@ const AICommand = () => {
             else { newProgress = 100; logIdx = 2; }
             setProgress(newProgress); setCurrentLog(logs[logIdx]);
             if (newProgress >= 100) {
+                const startedAt = processingStartedAt.current ?? Date.now();
+                const hasTimedOut = Date.now() - startedAt > processingTimeoutMs;
+
                 if (dataLoadingFinished.current) {
-                    if (pendingResearchResult.current) { setResearchResult(pendingResearchResult.current); setDataset(pendingResearchResult.current); navigate('/dashboard'); }
+                    const result = pendingResearchResult.current;
+                    if (result?.metadata?.intent === 'csv_import') {
+                        setDataset(result);
+                        setShowPreview(false);
+                        navigate('/dashboard');
+                    } else if (result) {
+                        setResearchResult(result);
+                    }
                     setIsProcessing(false); return;
-                } else { setProgress(99); }
+                }
+
+                if (hasTimedOut) {
+                    setCurrentLog('AI request timed out');
+                    setProgress(100);
+                    setIsProcessing(false);
+                    alert('The research request timed out. Please try again.');
+                    return;
+                }
+
+                setProgress(99);
             }
             animationFrame = requestAnimationFrame(animate);
         };
-        if (isProcessing) { startTime = null; animationFrame = requestAnimationFrame(animate); }
+        if (isProcessing) {
+            processingStartedAt.current = Date.now();
+            startTime = null;
+            animationFrame = requestAnimationFrame(animate);
+        }
         return () => cancelAnimationFrame(animationFrame);
     }, [isProcessing, navigate, setDataset]);
 
@@ -197,17 +252,21 @@ const AICommand = () => {
 
     const handleQuerySubmit = async (e: React.FormEvent) => {
         e.preventDefault(); if (!query.trim()) return;
+        setProgress(0);
+        setCurrentLog('doing web search');
         setIsProcessing(true); setResearchResult(null); setShowInsights(false);
         dataLoadingFinished.current = false; pendingResearchResult.current = null;
         try {
-            const result = await aiService.researchCompany(query);
+            const result = await aiService.researchCompany(query, buildCsvResearchContext(csvData));
             pendingResearchResult.current = result;
             dataLoadingFinished.current = true;
         } catch (error) {
             console.error(error);
             const message = getErrorMessage(error);
-            alert(`Failed to research company. ${message}`);
+            setProgress(100);
+            setCurrentLog('Research failed');
             setIsProcessing(false);
+            alert(`Failed to research company. ${message}`);
         }
     };
 
@@ -217,8 +276,16 @@ const AICommand = () => {
         setCopied(true); setTimeout(() => setCopied(false), 2000);
     };
 
+    const handleMoveResearchToDashboard = () => {
+        if (!researchResult) return;
+        setDataset(researchResult);
+        navigate('/dashboard');
+    };
+
     const handleMoveToDataset = async () => {
         if (csvData.length === 0) return;
+        setProgress(0);
+        setCurrentLog('Importing dataset');
         setIsProcessing(true); dataLoadingFinished.current = false; pendingResearchResult.current = null;
         try {
             const groupedData = csvData.reduce((acc, record) => {
@@ -282,7 +349,7 @@ const AICommand = () => {
                 </div>
             </header>
 
-            <main className='max-w-[860px] mx-auto px-6 pt-14 pb-24 relative z-10'>
+            <main className='w-full max-w-[860px] mx-auto px-4 sm:px-6 pt-14 pb-24 relative z-10'>
 
                 {/* ─── Hero Section ─────────────────────────────────────────────── */}
                 <div className='text-center mb-10'>
@@ -293,7 +360,7 @@ const AICommand = () => {
 
                     <motion.h1
                         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-                        className='text-5xl font-extrabold text-gray-900 mb-2 tracking-tight leading-tight font-sans'
+                        className='text-4xl sm:text-5xl font-extrabold text-gray-900 mb-2 tracking-tight leading-tight font-sans'
                     >
                         AI Command{' '}
                         <span className='relative inline-block'>
@@ -315,7 +382,7 @@ const AICommand = () => {
 
                 {/* ─── Main Card ────────────────────────────────────────────────── */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-                    className='bg-white/80 backdrop-blur-xl rounded-3xl border border-gray-200/80 p-8 shadow-xl shadow-gray-100/50 relative overflow-hidden mb-8'>
+                    className='bg-white/80 backdrop-blur-xl rounded-3xl border border-gray-200/80 p-4 sm:p-6 lg:p-8 shadow-xl shadow-gray-100/50 relative overflow-hidden mb-8'>
 
                     {/* Card inner glow */}
                     <div className='absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#149403]/30 to-transparent' />
@@ -367,7 +434,7 @@ const AICommand = () => {
                             </motion.div>
                             <div className='text-center'>
                                 <p className='text-gray-700 font-semibold text-sm mb-0.5' style={{ fontFamily: "'Syne', sans-serif" }}>Drop a CSV or XLSX file here</p>
-                                <p className='text-gray-400 text-xs'>Analyze your leads with AI instantly</p>
+                                <p className='text-gray-400 text-xs'>Analyze your leads locally; the first 100 rows can also guide company research</p>
                             </div>
                         </label>
                     </div>
@@ -478,7 +545,7 @@ const AICommand = () => {
                                             <div className='w-8 h-8 rounded-xl bg-[#E8F8F0] flex items-center justify-center text-[#149403]'><Database className='w-4 h-4' /></div>
                                             <h2 className='text-sm font-bold text-gray-900' style={{ fontFamily: "'Syne', sans-serif" }}>Research Results</h2>
                                         </div>
-                                        <button onClick={handleMoveToDataset}
+                                        <button onClick={handleMoveResearchToDashboard}
                                             className='flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#149403] to-[#0f7a0f] hover:from-[#0f7a0f] hover:to-[#0d660d] text-white rounded-xl transition-all text-xs font-bold shadow-md shadow-[#149403]/25 hover:-translate-y-0.5 font-sans'>
                                             <Database className='w-3.5 h-3.5' /> Move to Dashboard
                                         </button>
@@ -512,6 +579,23 @@ const AICommand = () => {
                                                     <div className='col-span-full'><MetadataRow label='Data Sources' value={researchResult.metadata?.data_sources?.join(', ')} /></div>
                                                 </div>
                                             </section>
+                                            {!!researchResult.sources?.length && (
+                                                <section>
+                                                    <div className='flex items-center gap-2 mb-4'>
+                                                        <div className='h-1 w-5 bg-green-600 rounded-full' />
+                                                        <h3 className='text-[10px] font-bold text-gray-400 uppercase tracking-widest' style={{ fontFamily: "'Syne', sans-serif" }}>Research Sources</h3>
+                                                    </div>
+                                                    <div className='grid gap-2 md:grid-cols-2'>
+                                                        {researchResult.sources.map((source: any) => (
+                                                            <a key={source.id} href={source.url} target='_blank' rel='noopener noreferrer' className='rounded-xl border border-gray-200 p-3 hover:border-green-500/50 hover:bg-green-50/40'>
+                                                                <span className='block text-sm font-semibold text-gray-900'>{safeRender(source.title)}</span>
+                                                                <span className='block mt-1 text-xs text-green-700 break-all'>{safeRender(source.url)}</span>
+                                                                {source.published_date && <span className='block mt-1 text-[10px] text-gray-500'>{safeRender(source.published_date)}</span>}
+                                                            </a>
+                                                        ))}
+                                                    </div>
+                                                </section>
+                                            )}
                                             {/* Company */}
                                             <section>
                                                 <div className='flex items-center gap-2 mb-4'>
@@ -562,8 +646,28 @@ const AICommand = () => {
                                                     {(researchResult.contacts || researchResult.key_people || []).map((contact: any, idx: number) => (
                                                         <ContactCard key={idx} contact={contact} companyName={safeRender(researchResult.account?.name || researchResult.company?.name) as string} />
                                                     ))}
+                                                    {!(researchResult.contacts || researchResult.key_people || []).length && <p className='text-sm text-gray-500'>No named decision makers were verified in the sources. Review the suggested buyer roles below instead.</p>}
                                                 </div>
                                             </section>
+                                            {!!researchResult.leads?.length && (
+                                                <section>
+                                                    <div className='flex items-center gap-2 mb-4'>
+                                                        <div className='h-1 w-5 bg-green-600 rounded-full' />
+                                                        <h3 className='text-[10px] font-bold text-gray-400 uppercase tracking-widest' style={{ fontFamily: "'Syne', sans-serif" }}>Suggested Buyer Roles</h3>
+                                                    </div>
+                                                    <p className='mb-3 text-xs text-gray-500'>These are role recommendations, not verified employees or named leads.</p>
+                                                    <div className='grid gap-3 md:grid-cols-2'>
+                                                        {researchResult.leads.map((lead: any) => (
+                                                            <div key={lead.lead_id} className='rounded-xl border border-gray-200 p-4'>
+                                                                <p className='text-sm font-bold text-gray-900'>{safeRender(lead.target_role)}</p>
+                                                                <p className='mt-1 text-xs text-gray-500'>{safeRender(lead.department)} · {safeRender(lead.priority)} priority</p>
+                                                                <p className='mt-2 text-sm text-gray-700'>{safeRender(lead.reason)}</p>
+                                                                {lead.source_url && <a href={lead.source_url} target='_blank' rel='noopener noreferrer' className='mt-2 inline-block text-xs text-green-700 hover:underline'>Evidence source</a>}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </section>
+                                            )}
                                             {/* Strategic Insights */}
                                             <section>
                                                 <div className='flex items-center gap-2 mb-4'>
@@ -604,8 +708,8 @@ const AICommand = () => {
                                 <div className='flex items-center gap-3'>
                                     <div className='w-10 h-10 rounded-2xl bg-gradient-to-br from-[#E8F8F0] to-[#d0f5e0] flex items-center justify-center text-[#149403] shadow-sm'><Sparkles className='w-5 h-5' /></div>
                                     <div>
-                                        <h3 className='text-xl font-extrabold text-gray-900' style={{ fontFamily: "'Syne', sans-serif" }}>AI Insights Generated</h3>
-                                        <p className='text-sm text-gray-400'>Based on your query and lead data</p>
+                                        <h3 className='text-xl font-extrabold text-gray-900' style={{ fontFamily: "'Syne', sans-serif" }}>Research Insights</h3>
+                                        <p className='text-sm text-gray-400'>Based on the cited company sources</p>
                                     </div>
                                 </div>
                                 <button onClick={() => setShowInsights(false)} className='p-2 hover:bg-gray-100 rounded-full transition-colors'><X className='w-5 h-5 text-gray-400' /></button>
@@ -613,28 +717,29 @@ const AICommand = () => {
                             <div className='max-w-[900px] mx-auto w-full'>
                                 <div className='grid grid-cols-1 md:grid-cols-2 gap-4 mb-8'>
                                     <div className='p-5 rounded-2xl border border-[#149403]/10 bg-[#fafffe]'>
-                                        <h4 className='font-bold text-gray-900 mb-2 flex items-center gap-2 text-sm' style={{ fontFamily: "'Syne', sans-serif" }}><FileText className='w-4 h-4 text-[#149403]' />Lead Scoring</h4>
-                                        <p className='text-sm text-gray-500'>85% of your leads are high-intent. 12 show immediate signs of readiness for outreach.</p>
+                                        <h4 className='font-bold text-gray-900 mb-2 flex items-center gap-2 text-sm' style={{ fontFamily: "'Syne', sans-serif" }}><FileText className='w-4 h-4 text-[#149403]' />Verified Contacts</h4>
+                                        <p className='text-sm text-gray-500'>{researchResult?.contacts?.length || 0} named decision makers were verified in the cited sources. No contact scores are inferred.</p>
                                     </div>
                                     <div className='p-5 rounded-2xl border border-[#149403]/10 bg-[#fafffe]'>
-                                        <h4 className='font-bold text-gray-900 mb-2 flex items-center gap-2 text-sm' style={{ fontFamily: "'Syne', sans-serif" }}><LayoutDashboard className='w-4 h-4 text-[#149403]' />Industry Breakdown</h4>
-                                        <p className='text-sm text-gray-500'>Primary sectors: SaaS (45%), Fintech (30%), E-commerce (25%).</p>
+                                        <h4 className='font-bold text-gray-900 mb-2 flex items-center gap-2 text-sm' style={{ fontFamily: "'Syne', sans-serif" }}><LayoutDashboard className='w-4 h-4 text-[#149403]' />Sourced Market Trends</h4>
+                                        <p className='text-sm text-gray-500'>{researchResult?.market_analysis?.market_trends?.length ? researchResult.market_analysis.market_trends.join(', ') : 'No market trends were verified in the retrieved sources.'}</p>
                                     </div>
                                 </div>
                                 <div className='space-y-3'>
                                     <h4 className='font-bold text-gray-900 text-sm' style={{ fontFamily: "'Syne', sans-serif" }}>Recommended Outreach Targets</h4>
-                                    {[1, 2, 3].map((_, i) => (
-                                        <div key={i} className='p-4 rounded-2xl border border-gray-200 flex items-center justify-between hover:border-[#149403]/30 hover:bg-[#fafffe] transition-all group cursor-pointer'>
+                                    {(researchResult?.leads || []).map((lead: any) => (
+                                        <div key={lead.lead_id} className='p-4 rounded-2xl border border-gray-200 flex items-center justify-between hover:border-[#149403]/30 hover:bg-[#fafffe] transition-all group'>
                                             <div className='flex items-center gap-3'>
                                                 <div className='w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-[#E8F8F0] group-hover:text-[#149403] transition-colors'><User className='w-5 h-5' /></div>
                                                 <div>
-                                                    <p className='font-semibold text-gray-900 text-sm' style={{ fontFamily: "'Syne', sans-serif" }}>Alex Thompson</p>
-                                                    <p className='text-xs text-gray-400'>CTO at TechFlow • High Intent</p>
+                                                    <p className='font-semibold text-gray-900 text-sm' style={{ fontFamily: "'Syne', sans-serif" }}>{safeRender(lead.target_role)}</p>
+                                                    <p className='text-xs text-gray-400'>Suggested buyer role · {safeRender(lead.department)}</p>
                                                 </div>
                                             </div>
-                                            <button className='text-xs font-bold text-[#149403]' style={{ fontFamily: "'Syne', sans-serif" }}>View Details →</button>
+                                            {lead.source_url && <a href={lead.source_url} target='_blank' rel='noopener noreferrer' className='text-xs font-bold text-[#149403] hover:underline' style={{ fontFamily: "'Syne', sans-serif" }}>Evidence</a>}
                                         </div>
                                     ))}
+                                    {!(researchResult?.leads || []).length && <p className='text-sm text-gray-500'>No evidence-backed buyer-role suggestions are available for this research.</p>}
                                 </div>
                             </div>
                         </motion.div>

@@ -36,6 +36,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { authService } from '../services/auth.service';
 import { useDataset } from '@/context/DatasetContext';
 import { formatNpr } from '../utils/currency';
+import { crmService, type CrmActivity } from '../services/crm.service';
 
 interface Lead {
     id: string;
@@ -80,6 +81,11 @@ const Leads: React.FC = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [notes, setNotes] = useState('');
     const [editingDealValueId, setEditingDealValueId] = useState<string | null>(null);
+    const [timelineActivities, setTimelineActivities] = useState<CrmActivity[]>([]);
+    const [timelineType, setTimelineType] = useState('Note');
+    const [timelineDescription, setTimelineDescription] = useState('');
+    const [timelineError, setTimelineError] = useState('');
+    const [timelineLoading, setTimelineLoading] = useState(false);
 
     useEffect(() => {
         // Select first lead by default if none selected
@@ -87,6 +93,32 @@ const Leads: React.FC = () => {
             setSelectedLead(leads[0]);
         }
     }, [leads, selectedLead]);
+
+    useEffect(() => {
+        if (!selectedLead?.id) {
+            setTimelineActivities([]);
+            return;
+        }
+
+        let isCurrent = true;
+        setTimelineLoading(true);
+        setTimelineError('');
+        crmService.listEntityActivities('lead', String(selectedLead.id))
+            .then(activities => {
+                if (isCurrent) setTimelineActivities(activities);
+            })
+            .catch(error => {
+                console.error('Could not load lead activity timeline.', error);
+                if (isCurrent) setTimelineError('Could not load this lead’s activity timeline.');
+            })
+            .finally(() => {
+                if (isCurrent) setTimelineLoading(false);
+            });
+
+        return () => {
+            isCurrent = false;
+        };
+    }, [selectedLead?.id]);
 
     const sidebarLinks = [
         { name: 'Home', icon: <Home size={20} />, path: '/' },
@@ -102,10 +134,46 @@ const Leads: React.FC = () => {
         { name: 'Settings', icon: <Settings size={20} />, path: '/settings', isBlue: true }
     ];
 
-    const handleStatusChange = (leadId: string, newStatus: string) => {
+    const handleStatusChange = async (leadId: string, newStatus: string) => {
+        const lead = leads.find(item => item.id === leadId);
         updateLead(leadId, { status: newStatus });
         if (selectedLead?.id === leadId) {
             setSelectedLead({ ...selectedLead, status: newStatus });
+        }
+        if (lead && lead.status !== newStatus) {
+            try {
+                const activity = await crmService.createEntityActivity({
+                    type: 'Status change',
+                    description: `Status changed from ${lead.status} to ${newStatus}.`,
+                    entityType: 'lead',
+                    entityId: leadId
+                });
+                if (selectedLead?.id === leadId) setTimelineActivities(current => [activity, ...current]);
+            } catch (error) {
+                console.error('Could not record lead status change in the timeline.', error);
+                if (selectedLead?.id === leadId) setTimelineError('Lead status was updated, but the activity could not be recorded.');
+            }
+        }
+    };
+
+    const addTimelineActivity = async (event: React.FormEvent) => {
+        event.preventDefault();
+        const description = timelineDescription.trim();
+        if (!selectedLead?.id || !description) return;
+
+        try {
+            const activity = await crmService.createEntityActivity({
+                type: timelineType,
+                description,
+                entityType: 'lead',
+                entityId: String(selectedLead.id)
+            });
+            setTimelineActivities(current => [activity, ...current]);
+            setTimelineDescription('');
+            setTimelineError('');
+        } catch (error) {
+            console.error('Could not add lead timeline activity.', error);
+            setTimelineError('Could not save this activity. Please try again.');
         }
     };
 
@@ -231,10 +299,10 @@ const Leads: React.FC = () => {
         <div className='flex h-screen bg-white text-gray-900 font-inter overflow-hidden'>
             <Sidebar activeNav={activeNav} />
             {/* --- MAIN WORKSPACE --- */}
-            <main className='flex-1 ml-60 flex flex-col overflow-hidden bg-white'>
+            <main className='flex-1 ml-60 min-w-0 flex flex-col overflow-hidden bg-white'>
                 {/* TOP TOOLBAR */}
-                <header className='px-8 py-4 bg-white border-b border-gray-100 flex items-center justify-between gap-6'>
-                    <div className='flex-1 flex items-center gap-4 max-w-2xl'>
+                <header className='px-4 sm:px-6 lg:px-8 py-4 bg-white border-b border-gray-100 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center sm:gap-6'>
+                    <div className='flex w-full items-center gap-4 sm:flex-1 sm:max-w-2xl'>
                         <div className='relative flex-1 group'>
                             <Search
                                 className='absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#22c55e] transition-colors'
@@ -254,7 +322,7 @@ const Leads: React.FC = () => {
                         </button> */}
                     </div>
 
-                    <div className='flex items-center gap-3'>
+                    <div className='flex items-center gap-3 sm:justify-end'>
                         <button
                             onClick={() => setShowAddModal(true)}
                             className='flex items-center gap-2 px-6 py-2.5 bg-[#22c55e] text-white rounded-2xl text-sm font-bold hover:bg-[#16a34a] transition-all shadow-lg shadow-green-100'
@@ -266,9 +334,9 @@ const Leads: React.FC = () => {
                 </header>
 
                 {/* PAGE CONTENT */}
-                <div className='flex-1 flex overflow-hidden'>
+                <div className='flex-1 min-h-0 flex flex-col overflow-visible lg:flex-row lg:overflow-hidden'>
                     {/* LEFT PANEL - LEADS TABLE (65%) */}
-                    <section className='w-[65%] border-r border-gray-100 flex flex-col overflow-hidden'>
+                    <section className='w-full min-h-[22rem] border-b border-gray-100 flex flex-col overflow-hidden lg:w-[65%] lg:min-h-0 lg:border-b-0 lg:border-r'>
                         <div className='flex-1 overflow-auto custom-scrollbar'>
                             <table className='w-full border-collapse'>
                                 <thead className='sticky top-0 bg-white z-10'>
@@ -382,7 +450,7 @@ const Leads: React.FC = () => {
                     </section>
 
                     {/* RIGHT PANEL - CONTACT DETAILS (35%) */}
-                    <aside className='w-[35%] bg-[#fcfdfd] overflow-y-auto custom-scrollbar'>
+                    <aside className='w-full bg-[#fcfdfd] overflow-y-auto custom-scrollbar lg:w-[35%]'>
                         <AnimatePresence mode='wait'>
                             {selectedLead ? (
                                 <motion.div
@@ -538,31 +606,48 @@ const Leads: React.FC = () => {
                                             />
                                             Activity Timeline
                                         </h3>
-                                        <div className='relative pl-6 space-y-6 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-gray-100'>
-                                            <TimelineItem
-                                                date='Jan 12'
-                                                event='Demo completed'
-                                                icon={<TrendingUp size={10} />}
-                                                color='bg-green-100 text-green-600'
+                                        <form onSubmit={addTimelineActivity} className='space-y-2'>
+                                            <div className='flex gap-2'>
+                                                <select value={timelineType} onChange={event => setTimelineType(event.target.value)} className='min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs'>
+                                                    <option>Note</option>
+                                                    <option>Call</option>
+                                                    <option>Email</option>
+                                                    <option>Meeting</option>
+                                                    <option>Task</option>
+                                                </select>
+                                                <button type='submit' disabled={!timelineDescription.trim()} className='rounded-xl bg-[#22c55e] px-3 py-2 text-xs font-bold text-white disabled:opacity-50'>
+                                                    Add activity
+                                                </button>
+                                            </div>
+                                            <textarea
+                                                value={timelineDescription}
+                                                onChange={event => setTimelineDescription(event.target.value)}
+                                                placeholder='Log a note, call, email, or meeting...'
+                                                rows={2}
+                                                className='w-full resize-y rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs'
                                             />
-                                            <TimelineItem
-                                                date='Jan 9'
-                                                event='Meeting scheduled'
-                                                icon={<Calendar size={10} />}
-                                                color='bg-blue-100 text-blue-600'
-                                            />
-                                            <TimelineItem
-                                                date='Jan 7'
-                                                event='Email sent'
-                                                icon={<Send size={10} />}
-                                                color='bg-purple-100 text-purple-600'
-                                            />
-                                            <TimelineItem
-                                                date='Jan 5'
-                                                event='Lead created'
-                                                icon={<Plus size={10} />}
-                                                color='bg-gray-100 text-gray-600'
-                                            />
+                                        </form>
+                                        {timelineError && <p role='alert' className='text-xs text-red-600'>{timelineError}</p>}
+                                        <div className='relative space-y-4 pl-6 before:absolute before:bottom-2 before:left-[11px] before:top-2 before:w-[2px] before:bg-gray-100'>
+                                            {timelineLoading ? (
+                                                <p className='text-xs text-gray-400'>Loading activity...</p>
+                                            ) : timelineActivities.length ? timelineActivities.map(activity => (
+                                                <div key={activity.id} className='relative'>
+                                                    <span className='absolute -left-6 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-green-50 text-green-600 ring-4 ring-white'>
+                                                        {activity.type.toLowerCase().includes('call') ? <Phone size={11} /> :
+                                                            activity.type.toLowerCase().includes('email') ? <Send size={11} /> :
+                                                                activity.type.toLowerCase().includes('meeting') ? <Calendar size={11} /> :
+                                                                    <FileText size={11} />}
+                                                    </span>
+                                                    <p className='text-xs font-semibold text-gray-800'>{activity.type}</p>
+                                                    <p className='mt-1 whitespace-pre-wrap break-words text-xs text-gray-600'>{activity.description}</p>
+                                                    <time className='mt-1 block text-[10px] text-gray-400' dateTime={activity.occurredAt}>
+                                                        {new Date(activity.occurredAt).toLocaleString()}
+                                                    </time>
+                                                </div>
+                                            )) : (
+                                                <p className='text-xs text-gray-400'>No activities yet. Log the first interaction above.</p>
+                                            )}
                                         </div>
                                     </div>
                                 </motion.div>

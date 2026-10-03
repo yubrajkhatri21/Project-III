@@ -183,11 +183,11 @@ const OperationsCenter: React.FC = () => {
     return (
         <div className='flex h-screen bg-white text-gray-900 font-inter overflow-hidden'>
             <Sidebar activeNav='Operations' />
-            <main className='flex-1 ml-60 overflow-y-auto bg-gray-50 p-8 custom-scrollbar'>
-                <header className='mb-8 flex items-center justify-between'>
+            <main className='flex-1 ml-60 min-w-0 overflow-y-auto bg-gray-50 p-4 sm:p-6 lg:p-8 custom-scrollbar'>
+                <header className='mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center'>
                     <div>
                         <p className='text-xs uppercase tracking-[0.2em] text-[#22c55e] font-bold'>Operations Center</p>
-                        <h1 className='text-3xl font-black text-gray-900 mt-2'>Sales, billing & support workflow</h1>
+                        <h1 className='text-2xl sm:text-3xl font-black text-gray-900 mt-2'>Sales, billing & support workflow</h1>
                     </div>
                     <button
                         onClick={handleLogout}

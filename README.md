@@ -115,8 +115,11 @@ Create `.env` files in both `frontend` and `backend` directories using the provi
 
 **Key Backend Variables:**
 - `DATABASE_URL`: Your PostgreSQL connection string.
-- `ANTHROPIC_API_KEY`: Your Anthropic API key for live AI features.
+- `OPENAI_API_KEY`: Your OpenAI API key for AI features and built-in web search. Keep this key in `backend/.env`; it is never sent to the browser. Live research requires internet access.
+- `LLM_PROVIDER=openai` and `OPENAI_MODEL=gpt-4.1-mini`: Select OpenAI for company research and AI features.
 - `UPTIQ_API_KEY`: For Agent-based research services.
+
+AI Command parses uploaded CSV/XLSX files locally. When you submit a company search, up to 100 rows of bounded local data are also sent to the authenticated backend as private context for the research; the file remains available in the local import preview.
 
 **Key Frontend Variables:**
 - `VITE_API_BASE_URL`: URL of your running backend.

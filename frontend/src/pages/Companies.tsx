@@ -12,12 +12,12 @@ const Companies: React.FC = () => {
         <div className='min-h-screen bg-[#f8fafc] text-slate-900'>
             <Sidebar activeNav='Companies' />
 
-            <main className='ml-60 p-8 lg:p-10'>
+            <main className='ml-60 p-4 sm:p-6 lg:p-10'>
                 <div className='max-w-7xl mx-auto'>
-                    <div className='flex items-center justify-between mb-8'>
+                    <div className='flex flex-col items-start justify-between gap-4 mb-8 sm:flex-row sm:items-center'>
                         <div>
                             <p className='text-sm font-semibold uppercase tracking-[0.2em] text-green-600'>Company Database</p>
-                            <h1 className='mt-2 text-3xl font-bold tracking-tight'>Companies</h1>
+                            <h1 className='mt-2 text-2xl sm:text-3xl font-bold tracking-tight'>Companies</h1>
                         </div>
 
                         <Link

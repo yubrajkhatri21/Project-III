@@ -26,9 +26,11 @@ aiRoutes.post('/chat', authMiddleware, catchAsync(async (c: Context) => {
 
 aiRoutes.post('/research-company', authMiddleware, catchAsync(async (c: Context) => {
   const body = await c.req.json();
-  const { query } = body;
+  const query = typeof body?.query === 'string' ? body.query.trim() : '';
+  if (!query) return c.json({ error: 'Enter a company name or website to research.' }, 400);
 
-  const result = await aiService.researchCompany(query);
+  const localCsvContext = aiService.normalizeLocalCsvContext(body?.localCsvContext);
+  const result = await aiService.researchCompany(query, localCsvContext);
   return c.json(result);
 }));
 

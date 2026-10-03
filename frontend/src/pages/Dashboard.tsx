@@ -222,12 +222,18 @@ const Dashboard: React.FC = () => {
             setChatMessages(prev => [...prev, response]);
         } catch (error) {
             console.error('AI chat failed:', error);
+            const responseMessage = (error as { response?: { data?: { message?: unknown } } } | null)?.response?.data?.message;
+            const errorMessage = typeof responseMessage === 'string'
+                ? responseMessage
+                : error instanceof Error
+                    ? error.message
+                    : 'Unknown AI service error.';
             setChatMessages(prev => [
                 ...prev,
                 {
                     id: crypto.randomUUID(),
                     role: 'assistant',
-                    content: 'I could not reach the AI service. Please check that the backend is running and try again.'
+                    content: `AI service error: ${errorMessage}`
                 }
             ]);
         } finally {
@@ -406,10 +412,10 @@ const Dashboard: React.FC = () => {
         <div className='flex h-screen bg-white text-gray-900 font-inter overflow-hidden'>
             <Sidebar activeNav={activeNav} />
             {/* --- MAIN WORKSPACE --- */}
-            <main className='flex-1 ml-60 overflow-y-auto bg-white relative'>
+            <main className='flex-1 ml-60 min-w-0 overflow-y-auto bg-white relative'>
                 {/* TOP BAR / AI CONTEXT BAR */}
-                <header className='sticky top-0 z-30 bg-white border-b border-gray-100 px-8 py-4'>
-                    <div className='flex items-center justify-between mb-2'>
+                <header className='sticky top-0 z-30 bg-white border-b border-gray-100 px-4 sm:px-6 lg:px-8 py-3 sm:py-4'>
+                    <div className='flex flex-col items-start justify-between gap-2 mb-2 sm:flex-row sm:items-center'>
                         <div className='flex items-center gap-4'>
                             <span className='px-2 py-0.5 rounded bg-green-100 text-green-700 text-[10px] font-bold uppercase tracking-wider'>
                                 {safeRender(dataset.metadata?.intent || 'Account Intelligence')}
@@ -427,8 +433,8 @@ const Dashboard: React.FC = () => {
                             </span>
                         </div>
                     </div>
-                    <div className='flex items-center justify-between gap-8'>
-                        <div className='flex flex-col max-w-[40%]'>
+                    <div className='flex flex-col items-start justify-between gap-3 lg:flex-row lg:items-center lg:gap-8'>
+                        <div className='flex flex-col w-full min-w-0 lg:max-w-[40%]'>
                             <h1 className='text-2xl font-bold text-gray-900 truncate'>
                                 {safeRender(currentCompanyDataset.account?.name || 'Market Analysis')}
                             </h1>
@@ -602,18 +608,14 @@ const Dashboard: React.FC = () => {
                                 </AnimatePresence>
                             </div>
 
-                            <div className='flex -space-x-2'>
-                                {(dataset.metadata?.data_sources || ['AI']).map((source: string, i: number) => {
+                            <div className='flex flex-wrap gap-2 max-w-[360px]'>
+                                {Array.isArray(dataset.sources) && dataset.sources.length > 0 ? dataset.sources.map((source: any) => (
+                                    <a key={source.id} href={source.url} target='_blank' rel='noopener noreferrer' title={source.title} className='max-w-[160px] truncate rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[10px] text-green-800 hover:border-green-500'>
+                                        {safeRender(source.title)}
+                                    </a>
+                                )) : (dataset.metadata?.data_sources || ['AI']).map((source: string, i: number) => {
                                     const renderedSource = String(safeRender(source));
-                                    return (
-                                        <div
-                                            key={i}
-                                            className='w-6 h-6 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-[8px] font-bold text-gray-500'
-                                            title={renderedSource}
-                                        >
-                                            {renderedSource[0] || '?'}
-                                        </div>
-                                    );
+                                    return <span key={i} className='rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-600' title={renderedSource}>{renderedSource}</span>;
                                 })}
                             </div>
                         </div>
@@ -1170,7 +1172,9 @@ const Dashboard: React.FC = () => {
                                         size={18}
                                         className='text-red-500'
                                     />
-                                    <h3 className='font-bold text-gray-900'>Priority Leads</h3>
+                                    <h3 className='font-bold text-gray-900'>
+                                        {(currentCompanyDataset.leads || []).some((lead: any) => lead.lead_type === 'recommended_role') ? 'Suggested Buyer Roles' : 'Priority Leads'}
+                                    </h3>
                                 </div>
                                 <div className='space-y-3'>
                                     {(currentCompanyDataset.leads || []).slice(0, 2).map((lead: any) => (
@@ -1185,6 +1189,8 @@ const Dashboard: React.FC = () => {
                                             />
                                             <h4 className='text-sm font-bold text-gray-900 mb-1'>{safeRender(lead.target_role)}</h4>
                                             <p className='text-[10px] text-gray-500 line-clamp-2'>{safeRender(lead.reason)}</p>
+                                            {lead.lead_type === 'recommended_role' && <p className='mt-1 text-[9px] font-semibold uppercase tracking-wide text-amber-700'>Role suggestion, not a verified person</p>}
+                                            {lead.source_url && <a href={lead.source_url} target='_blank' rel='noopener noreferrer' className='mt-2 inline-block text-[10px] font-semibold text-green-700 hover:underline'>Evidence source</a>}
                                         </div>
                                     ))}
                                 </div>

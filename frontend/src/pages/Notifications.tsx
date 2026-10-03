@@ -44,12 +44,12 @@ const NotificationsCenter: React.FC = () => {
         <div className='min-h-screen bg-slate-50 text-slate-900'>
             <Sidebar activeNav='Notifications' />
 
-            <main className='ml-60 p-8 lg:p-10'>
+            <main className='ml-60 p-4 sm:p-6 lg:p-10'>
                 <div className='max-w-5xl mx-auto'>
-                    <div className='mb-8 flex items-center justify-between'>
+                    <div className='mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center'>
                         <div>
                             <p className='text-sm font-semibold uppercase tracking-[0.2em] text-green-600'>Communication</p>
-                            <h1 className='mt-2 text-3xl font-bold tracking-tight'>Notifications</h1>
+                            <h1 className='mt-2 text-2xl sm:text-3xl font-bold tracking-tight'>Notifications</h1>
                         </div>
                         <div className='rounded-2xl bg-green-600 px-4 py-2 text-sm font-semibold text-white'>
                             {unread} unread
@@ -60,9 +60,9 @@ const NotificationsCenter: React.FC = () => {
                         {notifications.map(item => (
                             <div
                                 key={item.id}
-                                className={`rounded-2xl border p-5 shadow-sm ${item.read ? 'border-slate-200 bg-white' : 'border-green-200 bg-green-50/50'}`}
+                                className={`rounded-2xl border p-4 sm:p-5 shadow-sm ${item.read ? 'border-slate-200 bg-white' : 'border-green-200 bg-green-50/50'}`}
                             >
-                                <div className='flex items-start justify-between gap-4'>
+                                <div className='flex flex-col items-start justify-between gap-4 sm:flex-row'>
                                     <div className='flex gap-3'>
                                         <div className={`mt-1 rounded-xl p-2 ${item.type === 'success' ? 'bg-green-100 text-green-600' : item.type === 'warning' ? 'bg-amber-100 text-amber-600' : 'bg-sky-100 text-sky-600'}`}>
                                             {item.type === 'success' ? <CheckCircle2 size={18} /> : item.type === 'warning' ? <Clock3 size={18} /> : <Bell size={18} />}

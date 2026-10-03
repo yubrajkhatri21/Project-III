@@ -33,6 +33,7 @@ model User {
   notifications Notification[]
   auditLogs  AuditLog[]
   automationRules AutomationRule[]
+  automationRuns AutomationRun[]
 
   @@index([email])
 }
@@ -56,6 +57,7 @@ model Lead {
   phone           String?
   priority        String   @default("Medium")
   score           Int      @default(0)
+  assignedTo      String?
   notes           String?
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -209,20 +211,44 @@ model AuditLog {
 }
 
 model AutomationRule {
-  id          String   @id @default(uuid())
-  name        String
-  trigger     String
-  action      String
-  owner       String
-  frequency   String   @default("Instant")
-  active      Boolean  @default(true)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  isDeleted   Boolean  @default(false)
+  id            String           @id @default(uuid())
+  name          String
+  trigger       String
+  action        String
+  actionType    String           @default("notify")
+  actionConfig  Json?
+  conditions    Json?
+  owner         String
+  frequency     String           @default("Instant")
+  active        Boolean          @default(true)
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  isDeleted     Boolean          @default(false)
+  runs          AutomationRun[]
 
   @@index([userId, active])
+}
+
+model AutomationRun {
+  id          String         @id @default(uuid())
+  ruleId      String
+  rule        AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ruleName    String
+  trigger     String
+  eventKey    String?        @unique
+  status      String         @default("running")
+  message     String
+  attempts    Int            @default(1)
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+  completedAt DateTime?
+  isDeleted   Boolean        @default(false)
+
+  @@index([userId, createdAt])
+  @@index([ruleId, createdAt])
 }
 
 model Company {

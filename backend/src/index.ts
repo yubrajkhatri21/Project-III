@@ -2,6 +2,7 @@ import app from './app.ts';
 import prisma from './client.ts';
 import { serve } from '@hono/node-server';
 import dotenv from 'dotenv';
+import { startAutomationScheduler } from './services/automationService.ts';
 
 let server: any;
 
@@ -18,6 +19,7 @@ async function main() {
     try {
         await prisma.$connect();
         console.log("Database connected");
+        startAutomationScheduler();
     } catch (error) {
         console.error("Database connection failed:");
         console.error(error);

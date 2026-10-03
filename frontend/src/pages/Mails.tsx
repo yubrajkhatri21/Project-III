@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import {
@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authService } from '../services/auth.service';
+import { aiService } from '../services/ai.service';
 import { emailService } from '../services/email.service';
 import { useDataset } from '@/context/DatasetContext';
 
@@ -140,14 +141,98 @@ const Mails: React.FC = () => {
         subject: '',
         body: ''
     });
+    const [draftSettings, setDraftSettings] = useState({
+        role: 'CTO',
+        topic: '',
+        tone: 'Professional',
+        length: 'Medium'
+    });
+    const [draftGoal, setDraftGoal] = useState('');
+    const [selectedAttachments, setSelectedAttachments] = useState<File[]>([]);
     const [isSending, setIsSending] = useState(false);
+    const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
+    const [draftAssistantMessage, setDraftAssistantMessage] = useState<string | null>(null);
+    const emojiList = ['😊', '👍', '🎉', '✅', '🔥', '🚀', '💡', '📩', '📎', '🤝'];
     const [sendMessage, setSendMessage] = useState<string | null>(null);
+    const [gmailInboxMessages, setGmailInboxMessages] = useState<any[]>([]);
+    const [isConnectingGmail, setIsConnectingGmail] = useState(false);
+    const [gmailConnectionMessage, setGmailConnectionMessage] = useState<string | null>(() => localStorage.getItem('gmailStatus'));
+    const [gmailConnected, setGmailConnected] = useState<boolean>(() => localStorage.getItem('gmailConnected') === 'true');
+
+    useEffect(() => {
+        const syncGmailState = () => {
+            const connected = localStorage.getItem('gmailConnected') === 'true';
+            setGmailConnected(connected);
+            const status = localStorage.getItem('gmailStatus');
+            if (status) setGmailConnectionMessage(status);
+        };
+
+        window.addEventListener('storage', syncGmailState);
+        syncGmailState();
+        return () => window.removeEventListener('storage', syncGmailState);
+    }, []);
+
+    useEffect(() => {
+        if (!gmailConnected) {
+            setGmailInboxMessages([]);
+            return;
+        }
+
+        const loadGmailInbox = async () => {
+            try {
+                const response = await emailService.getGmailInbox();
+                setGmailInboxMessages(Array.isArray(response?.messages) ? response.messages : []);
+            } catch (error) {
+                setGmailInboxMessages([]);
+            }
+        };
+
+        loadGmailInbox();
+    }, [gmailConnected]);
+
     const handleLogout = () => {
         authService.logout();
         navigate('/');
     };
 
     const dynamicEmails = useMemo(() => {
+        const gmailEmails = gmailInboxMessages.map((message: any, index: number) => {
+            const from = message?.from || 'Unknown sender';
+            const senderName = from.replace(/<.*>/, '').trim() || 'Unknown sender';
+            const senderEmail = from.match(/<([^>]+)>/)?.[1] || '';
+
+            return {
+                id: `gmail-${message.id || index}`,
+                source: 'Gmail',
+                contact: {
+                    name: senderName,
+                    email: senderEmail,
+                    role: 'Gmail contact',
+                    company: 'Gmail inbox',
+                    avatar: (senderName || 'G')[0]?.toUpperCase() || 'G'
+                },
+                subject: message?.subject || 'No subject',
+                preview: message?.preview || 'No preview available.',
+                sentiment: 'Neutral',
+                deal: 'Inbox thread',
+                timestamp: message?.date ? new Date(message.date).toLocaleString() : 'Recently',
+                status: 'Received',
+                priority: 'Medium',
+                intent: 'Inbox sync',
+                isUnread: true,
+                keyPoints: ['Fetched from Gmail inbox', 'Connected via Google OAuth'],
+                suggestedResponse: 'Thanks for the email. I will review it and follow up shortly.',
+                nextAction: 'Review inbox item',
+                thread: [{
+                    id: `gmail-thread-${message.id || index}`,
+                    sender: senderName,
+                    role: 'incoming',
+                    content: `${message?.preview || 'No preview available.'}`,
+                    time: message?.date ? new Date(message.date).toLocaleTimeString() : 'Now'
+                }]
+            };
+        });
+
         const datasetEmails = (emails || []).map((email: any, index: number) => {
             const contactInfo = leads?.find((c: any) => c.name === email.contact);
             return {
@@ -161,12 +246,12 @@ const Mails: React.FC = () => {
                 },
                 subject: email.subject,
                 preview: email.summary || 'No preview available.',
-                sentiment: 'Neutral', // Manual/placeholder
-                deal: 'Associated Deal', // Manual/placeholder
+                sentiment: 'Neutral',
+                deal: 'Associated Deal',
                 timestamp: email.timestamp ? new Date(email.timestamp).toLocaleDateString() : 'Recently',
-                status: 'Awaiting reply', // Manual/placeholder
-                priority: 'Medium', // Manual/placeholder
-                intent: 'Inquiry', // Manual/placeholder
+                status: 'Awaiting reply',
+                priority: 'Medium',
+                intent: 'Inquiry',
                 isUnread: index === 0,
                 keyPoints: ['Extracted from communication history', 'Awaiting manual assessment'],
                 suggestedResponse: 'Thank you for your email. I will review the details and get back to you shortly.',
@@ -232,8 +317,8 @@ const Mails: React.FC = () => {
             };
         });
 
-        return [...demoEmails, ...datasetEmails];
-    }, [emails, leads]);
+        return [...gmailEmails, ...demoEmails, ...datasetEmails];
+    }, [emails, leads, gmailInboxMessages]);
 
     const sidebarLinks = [
         { name: 'Home', icon: <Home size={20} />, path: '/' },
@@ -268,6 +353,81 @@ const Mails: React.FC = () => {
         setViewThread(false);
     };
 
+    const handleConnectGmail = async () => {
+        try {
+            setIsConnectingGmail(true);
+            setGmailConnectionMessage('Opening Google sign-in...');
+            const ok = await emailService.connectGmail();
+            if (ok) {
+                setGmailConnectionMessage('Google sign-in opened in a new tab. Complete the flow to connect Gmail.');
+            } else {
+                setGmailConnectionMessage('Could not start the Gmail connection flow.');
+            }
+        } catch (error: any) {
+            setGmailConnectionMessage(error?.response?.data?.message || 'Unable to start Gmail OAuth.');
+        } finally {
+            setIsConnectingGmail(false);
+        }
+    };
+
+    const handleSelectAttachments = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.target.files || []);
+        setSelectedAttachments(prev => [...prev, ...files]);
+        event.target.value = '';
+    };
+
+    const handleInsertEmoji = (emoji: string) => {
+        setComposeForm(prev => ({
+            ...prev,
+            body: `${prev.body}${prev.body ? ' ' : ''}${emoji}`
+        }));
+    };
+
+    const handleGenerateDraft = async (mode: 'compose' | 'smart' = 'compose') => {
+        const topic = mode === 'compose' ? draftSettings.topic : draftGoal;
+        const tone = mode === 'compose' ? draftSettings.tone : 'Professional';
+        const recipientRole = mode === 'compose' ? draftSettings.role : 'decision maker';
+        const length = mode === 'compose' ? draftSettings.length : 'Medium';
+
+        if (!topic.trim()) {
+            setDraftAssistantMessage('Add a brief topic or goal before generating the email draft.');
+            return;
+        }
+
+        try {
+            setIsGeneratingDraft(true);
+            setDraftAssistantMessage(null);
+
+            const response = await aiService.chat([
+                {
+                    id: 'email-draft',
+                    role: 'user',
+                    content: `Write a ${length.toLowerCase()} length email drafted for a ${recipientRole} in a ${tone.toLowerCase()} tone. Topic: ${topic}. Include a clear subject line, short intro, core message, and a concise CTA. Keep it useful for a CRM sales workflow.`
+                }
+            ]);
+
+            const draftText = response?.content || 'Hi there,\n\nThanks for your time. I wanted to follow up on the opportunity and share a quick update.\n\nI would appreciate a chance to connect and discuss the next step.\n\nBest regards,';
+            const firstLine = draftText.split('\n')[0]?.startsWith('Subject:') ? draftText.split('\n')[0] : 'Subject: Follow-up on the opportunity';
+            const body = draftText.includes('\n') ? draftText.split('\n').slice(1).join('\n').trim() || draftText : draftText;
+
+            setComposeForm(prev => ({
+                ...prev,
+                subject: firstLine.replace(/^Subject:\s*/i, '').trim() || prev.subject || 'Follow-up on the opportunity',
+                body: body.trim() || prev.body
+            }));
+
+            if (mode === 'smart') {
+                setIsDrafting(false);
+            }
+
+            setDraftAssistantMessage('AI draft inserted into the email composer.');
+        } catch (error: any) {
+            setDraftAssistantMessage(error?.message || 'Unable to generate an AI draft right now.');
+        } finally {
+            setIsGeneratingDraft(false);
+        }
+    };
+
     const handleSendEmail = async () => {
         if (!composeForm.to.trim() || !composeForm.subject.trim() || !composeForm.body.trim()) {
             setSendMessage('Please fill in the recipient, subject, and message body before sending.');
@@ -278,15 +438,33 @@ const Mails: React.FC = () => {
             setIsSending(true);
             setSendMessage(null);
 
+            const attachments = await Promise.all(selectedAttachments.map(async file => {
+                const arrayBuffer = await file.arrayBuffer();
+                const bytes = new Uint8Array(arrayBuffer);
+                let binary = '';
+                bytes.forEach(byte => {
+                    binary += String.fromCharCode(byte);
+                });
+                const contentBase64 = btoa(binary);
+
+                return {
+                    filename: file.name,
+                    mimeType: file.type || 'application/octet-stream',
+                    contentBase64
+                };
+            }));
+
             const response = await emailService.sendEmail({
                 to: composeForm.to,
                 subject: composeForm.subject,
-                text: composeForm.body
+                text: composeForm.body,
+                attachments: attachments.length > 0 ? attachments : undefined
             });
 
             if (response?.success) {
                 setSendMessage(response.message || 'Email sent successfully.');
                 setComposeForm({ to: '', subject: '', body: '' });
+                setSelectedAttachments([]);
                 setIsComposing(false);
             } else {
                 setSendMessage(response?.message || 'Email could not be sent.');
@@ -387,8 +565,8 @@ const Mails: React.FC = () => {
             {/* --- MAIN WORKSPACE --- */}
             <div className='flex-1 ml-60 flex flex-col overflow-hidden'>
                 {/* --- TOP TOOLBAR --- */}
-                <header className='h-16 border-b border-gray-100 flex items-center justify-between px-6 bg-white shrink-0 z-20'>
-                    <div className='flex items-center gap-4 flex-1 max-w-2xl'>
+                <header className='min-h-16 border-b border-gray-100 flex flex-col items-stretch gap-3 px-3 py-3 bg-white shrink-0 z-20 sm:flex-row sm:items-center sm:justify-between sm:px-6'>
+                    <div className='flex w-full items-center gap-3 sm:flex-1 sm:gap-4 sm:max-w-2xl'>
                         <div className='relative flex-1 group'>
                             <Search
                                 className='absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#22c55e] transition-colors'
@@ -410,7 +588,19 @@ const Mails: React.FC = () => {
                         </button>
                     </div>
 
-                    <div className='flex items-center gap-3 ml-4'>
+                    <div className='flex flex-wrap items-center gap-2 sm:gap-3 sm:ml-4'>
+                        <button
+                            onClick={handleConnectGmail}
+                            disabled={isConnectingGmail}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                                gmailConnected
+                                    ? 'bg-green-50 text-[#166534] border border-green-200'
+                                    : 'bg-[#f5f3ff] text-[#5b21b6] border border-[#e9d5ff] hover:bg-[#efe7ff]'
+                            }`}
+                        >
+                            <Mail size={14} />
+                            {isConnectingGmail ? 'Connecting...' : gmailConnected ? 'Gmail Connected' : 'Connect Gmail'}
+                        </button>
                         <button
                             onClick={() => setIsDrafting(true)}
                             className='px-4 py-2 border border-[#22c55e] text-[#22c55e] rounded-xl text-xs font-bold hover:bg-green-50 transition-all flex items-center gap-2'
@@ -427,10 +617,15 @@ const Mails: React.FC = () => {
                         </button>
                     </div>
                 </header>
+                {gmailConnectionMessage && (
+                    <div className='px-6 py-2 border-b border-gray-100 bg-[#f6fff7] text-xs text-[#166534]'>
+                        {gmailConnectionMessage}
+                    </div>
+                )}
                 {/* --- THREE COLUMN LAYOUT --- */}
-                <div className='flex-1 flex overflow-hidden bg-white'>
+                <div className='flex-1 flex min-h-0 flex-col overflow-visible bg-white lg:flex-row lg:overflow-hidden'>
                     {/* COLUMN 1: LEFT SIDEBAR (20%) */}
-                    <aside className='w-[20%] border-r border-gray-100 bg-white flex flex-col shrink-0 overflow-y-auto custom-scrollbar'>
+                    <aside className='w-full max-h-48 border-b border-gray-100 bg-white flex flex-col shrink-0 overflow-y-auto custom-scrollbar lg:w-[20%] lg:max-h-none lg:border-b-0 lg:border-r'>
                         <div className='p-4 space-y-1'>
                             {folders.map(folder => (
                                 <button
@@ -517,7 +712,7 @@ const Mails: React.FC = () => {
                     </aside>
 
                     {/* COLUMN 2: CENTER PANEL (40%) */}
-                    <main className='w-[40%] border-r border-gray-100 flex flex-col shrink-0 bg-[#fcfcfc] overflow-hidden relative'>
+                    <main className='w-full h-[65vh] min-h-[28rem] border-b border-gray-100 flex flex-col shrink-0 bg-[#fcfcfc] overflow-hidden relative lg:h-auto lg:w-[40%] lg:min-h-0 lg:border-b-0 lg:border-r'>
                         <AnimatePresence mode='wait'>
                             {!viewThread ? (
                                 <motion.div
@@ -794,7 +989,7 @@ const Mails: React.FC = () => {
                     </main>
 
                     {/* COLUMN 3: RIGHT PANEL (40%) */}
-                    <aside className='w-[40%] flex flex-col bg-white overflow-hidden'>
+                    <aside className='w-full min-h-[20rem] flex flex-col bg-white overflow-hidden lg:w-[40%] lg:min-h-0'>
                         {selectedEmail ? (
                             <div className='flex-1 flex flex-col overflow-hidden'>
                                 <div className='p-6 border-b border-gray-100 flex items-center justify-between bg-white shrink-0'>
@@ -984,12 +1179,12 @@ const Mails: React.FC = () => {
             {/* --- COMPOSE PANEL OVERLAY --- */}
             <AnimatePresence>
                 {isComposing && (
-                    <div className='fixed inset-0 z-50 flex items-end justify-end p-6 pointer-events-none'>
+                    <div className='fixed inset-0 z-50 flex items-end justify-end p-2 sm:p-6 pointer-events-none'>
                         <motion.div
                             initial={{ opacity: 0, y: 100, scale: 0.95 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 100, scale: 0.95 }}
-                            className='w-full max-w-4xl bg-white rounded-[2.5rem] shadow-[0_30px_100px_-20px_rgba(0,0,0,0.2)] border border-gray-200 flex flex-col pointer-events-auto overflow-hidden h-[700px] max-h-[90vh]'
+                            className='w-full max-w-4xl bg-white rounded-2xl sm:rounded-[2.5rem] shadow-[0_30px_100px_-20px_rgba(0,0,0,0.2)] border border-gray-200 flex flex-col pointer-events-auto overflow-hidden h-[90dvh] max-h-[700px]'
                         >
                             <div className='p-5 bg-gray-50 border-b border-gray-200 flex items-center justify-between shrink-0'>
                                 <div className='flex items-center gap-3'>
@@ -1053,6 +1248,27 @@ const Mails: React.FC = () => {
                                         />
                                     </div>
 
+                                    {selectedAttachments.length > 0 && (
+                                        <div className='space-y-2 rounded-xl border border-gray-200 bg-gray-50 p-3'>
+                                            <p className='text-[10px] font-bold uppercase tracking-widest text-gray-400'>Attachments</p>
+                                            <div className='flex flex-wrap gap-2'>
+                                                {selectedAttachments.map((file, index) => (
+                                                    <div key={`${file.name}-${index}`} className='flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700'>
+                                                        <PaperclipIcon size={12} />
+                                                        <span className='max-w-[180px] truncate'>{file.name}</span>
+                                                        <button
+                                                            type='button'
+                                                            onClick={() => setSelectedAttachments(prev => prev.filter((_, idx) => idx !== index))}
+                                                            className='text-gray-400 hover:text-red-500'
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {sendMessage && (
                                         <div className='rounded-xl border border-green-200 bg-green-50 text-green-700 text-xs px-3 py-2'>
                                             {sendMessage}
@@ -1061,15 +1277,31 @@ const Mails: React.FC = () => {
 
                                     <div className='flex items-center justify-between py-6 border-t border-gray-100 mt-auto shrink-0'>
                                         <div className='flex items-center gap-2'>
-                                            <button className='w-10 h-10 flex items-center justify-center hover:bg-gray-100 rounded-xl text-gray-400 transition-colors'>
+                                            <label className='w-10 h-10 flex items-center justify-center hover:bg-gray-100 rounded-xl text-gray-400 transition-colors cursor-pointer'>
                                                 <PaperclipIcon size={20} />
-                                            </button>
-                                            <button className='w-10 h-10 flex items-center justify-center hover:bg-gray-100 rounded-xl text-gray-400 transition-colors'>
+                                                <input type='file' multiple className='hidden' onChange={handleSelectAttachments} />
+                                            </label>
+                                            <label className='w-10 h-10 flex items-center justify-center hover:bg-gray-100 rounded-xl text-gray-400 transition-colors cursor-pointer'>
                                                 <ImageIcon size={20} />
-                                            </button>
-                                            <button className='w-10 h-10 flex items-center justify-center hover:bg-gray-100 rounded-xl text-gray-400 transition-colors'>
-                                                <Smile size={20} />
-                                            </button>
+                                                <input type='file' accept='image/*' className='hidden' onChange={handleSelectAttachments} />
+                                            </label>
+                                            <div className='relative group'>
+                                                <button type='button' className='w-10 h-10 flex items-center justify-center hover:bg-gray-100 rounded-xl text-gray-400 transition-colors'>
+                                                    <Smile size={20} />
+                                                </button>
+                                                <div className='absolute bottom-12 left-0 hidden group-hover:flex group-focus-within:flex gap-2 rounded-xl border border-gray-200 bg-white p-2 shadow-lg z-20'>
+                                                    {emojiList.map(emoji => (
+                                                        <button
+                                                            key={emoji}
+                                                            type='button'
+                                                            onClick={() => handleInsertEmoji(emoji)}
+                                                            className='text-lg hover:scale-110 transition-transform'
+                                                        >
+                                                            {emoji}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
                                             <div className='w-px h-6 bg-gray-200 mx-2' />
                                             <button className='px-4 py-2 bg-green-50 text-[#22c55e] rounded-xl text-[10px] font-bold hover:bg-green-100 transition-all flex items-center gap-2'>
                                                 <Bot size={14} /> Smart Check
@@ -1103,7 +1335,11 @@ const Mails: React.FC = () => {
                                                 <label className='text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2'>
                                                     Recipient Role
                                                 </label>
-                                                <select className='w-full bg-white border border-gray-200 rounded-2xl p-3.5 text-xs font-bold outline-none focus:ring-2 focus:ring-[#22c55e]/20 transition-all appearance-none'>
+                                                <select
+                                                    value={draftSettings.role}
+                                                    onChange={(e) => setDraftSettings(prev => ({ ...prev, role: e.target.value }))}
+                                                    className='w-full bg-white border border-gray-200 rounded-2xl p-3.5 text-xs font-bold outline-none focus:ring-2 focus:ring-[#22c55e]/20 transition-all appearance-none'
+                                                >
                                                     <option>CTO</option>
                                                     <option>CEO</option>
                                                     <option>VP Engineering</option>
@@ -1117,6 +1353,8 @@ const Mails: React.FC = () => {
                                                 </label>
                                                 <input
                                                     type='text'
+                                                    value={draftSettings.topic}
+                                                    onChange={(e) => setDraftSettings(prev => ({ ...prev, topic: e.target.value }))}
                                                     placeholder='e.g. Data platform demo'
                                                     className='w-full bg-white border border-gray-200 rounded-2xl p-3.5 text-xs font-bold outline-none focus:ring-2 focus:ring-[#22c55e]/20 transition-all'
                                                 />
@@ -1125,7 +1363,11 @@ const Mails: React.FC = () => {
                                                 <label className='text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2'>
                                                     Desired Tone
                                                 </label>
-                                                <select className='w-full bg-white border border-gray-200 rounded-2xl p-3.5 text-xs font-bold outline-none focus:ring-2 focus:ring-[#22c55e]/20 transition-all appearance-none'>
+                                                <select
+                                                    value={draftSettings.tone}
+                                                    onChange={(e) => setDraftSettings(prev => ({ ...prev, tone: e.target.value }))}
+                                                    className='w-full bg-white border border-gray-200 rounded-2xl p-3.5 text-xs font-bold outline-none focus:ring-2 focus:ring-[#22c55e]/20 transition-all appearance-none'
+                                                >
                                                     <option>Professional</option>
                                                     <option>Friendly & Casual</option>
                                                     <option>Direct & Concise</option>
@@ -1140,7 +1382,8 @@ const Mails: React.FC = () => {
                                                     {['Short', 'Medium', 'Long'].map(l => (
                                                         <button
                                                             key={l}
-                                                            className={`flex-1 py-2.5 rounded-xl text-[10px] font-bold border transition-all ${l === 'Medium' ? 'bg-[#22c55e] text-white border-[#22c55e] shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                                                            onClick={() => setDraftSettings(prev => ({ ...prev, length: l }))}
+                                                            className={`flex-1 py-2.5 rounded-xl text-[10px] font-bold border transition-all ${draftSettings.length === l ? 'bg-[#22c55e] text-white border-[#22c55e] shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'}`}
                                                         >
                                                             {l}
                                                         </button>
@@ -1149,9 +1392,19 @@ const Mails: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <button className='w-full py-4 bg-[#22c55e] text-white rounded-2xl font-bold hover:bg-[#16a34a] transition-all shadow-lg shadow-green-50 flex items-center justify-center gap-2'>
+                                        {draftAssistantMessage && (
+                                            <div className='rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-[10px] text-green-700'>
+                                                {draftAssistantMessage}
+                                            </div>
+                                        )}
+
+                                        <button
+                                            onClick={() => void handleGenerateDraft('compose')}
+                                            disabled={isGeneratingDraft}
+                                            className='w-full py-4 bg-[#22c55e] text-white rounded-2xl font-bold hover:bg-[#16a34a] transition-all shadow-lg shadow-green-50 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed'
+                                        >
                                             <Sparkles size={16} />
-                                            Generate AI Draft
+                                            {isGeneratingDraft ? 'Generating...' : 'Generate AI Draft'}
                                         </button>
 
                                         <div className='pt-8 border-t border-gray-200'>
@@ -1162,6 +1415,10 @@ const Mails: React.FC = () => {
                                                 {TEMPLATES.slice(0, 3).map(template => (
                                                     <div
                                                         key={template.id}
+                                                        onClick={() => {
+                                                            setDraftSettings(prev => ({ ...prev, topic: template.title, role: template.persona }));
+                                                            void handleGenerateDraft('compose');
+                                                        }}
                                                         className='p-4 bg-white border border-gray-100 rounded-2xl hover:border-[#22c55e]/30 cursor-pointer transition-all shadow-sm group'
                                                     >
                                                         <div className='flex items-center justify-between mb-1'>
@@ -1190,14 +1447,14 @@ const Mails: React.FC = () => {
             {/* --- SMART DRAFT OVERLAY (FOR "CREATE DRAFT" BUTTON) --- */}
             <AnimatePresence>
                 {isDrafting && (
-                    <div className='fixed inset-0 z-[60] flex items-center justify-center p-6 bg-gray-900/40 backdrop-blur-md'>
+                    <div className='fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6 bg-gray-900/40 backdrop-blur-md'>
                         <motion.div
                             initial={{ opacity: 0, scale: 0.9, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.9, y: 20 }}
                             className='w-full max-w-xl bg-white rounded-[3rem] shadow-2xl border border-white/50 overflow-hidden flex flex-col'
                         >
-                            <div className='p-10 bg-gradient-to-br from-[#dcfce7] to-white flex flex-col items-center text-center relative'>
+                            <div className='p-5 sm:p-10 bg-gradient-to-br from-[#dcfce7] to-white flex flex-col items-center text-center relative'>
                                 <button
                                     onClick={() => setIsDrafting(false)}
                                     className='absolute top-6 right-6 w-10 h-10 flex items-center justify-center hover:bg-white/50 rounded-full text-gray-400 transition-colors'
@@ -1247,6 +1504,8 @@ const Mails: React.FC = () => {
                                         </label>
                                         <input
                                             type='text'
+                                            value={draftGoal}
+                                            onChange={(e) => setDraftGoal(e.target.value)}
                                             placeholder='e.g. Schedule a 15-minute intro call'
                                             className='w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold outline-none focus:ring-2 focus:ring-[#22c55e]/20 focus:bg-white transition-all shadow-inner'
                                         />
@@ -1260,9 +1519,18 @@ const Mails: React.FC = () => {
                                     >
                                         Discard
                                     </button>
-                                    <button className='flex-[2] py-5 bg-[#22c55e] text-white rounded-2xl text-sm font-black hover:bg-[#16a34a] transition-all shadow-xl shadow-green-100 flex items-center justify-center gap-2'>
+                                    <button
+                                        onClick={() => {
+                                            if (!draftGoal.trim()) {
+                                                setDraftGoal('Follow-up and next steps for a sales conversation');
+                                            }
+                                            void handleGenerateDraft('smart');
+                                        }}
+                                        className='flex-[2] py-5 bg-[#22c55e] text-white rounded-2xl text-sm font-black hover:bg-[#16a34a] transition-all shadow-xl shadow-green-100 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed'
+                                        disabled={isGeneratingDraft}
+                                    >
                                         <Sparkles size={18} />
-                                        Compose AI Draft
+                                        {isGeneratingDraft ? 'Generating...' : 'Compose AI Draft'}
                                     </button>
                                 </div>
                             </div>

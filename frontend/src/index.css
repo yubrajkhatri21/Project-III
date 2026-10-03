@@ -203,13 +203,59 @@
 body {
     margin: 0;
     padding: 0;
-    overflow-x: hidden;
-    height: 100dvh;
+    overflow-x: clip;
+    min-height: 100dvh;
     width: 100%;
 }
 
 #root {
-    height: 100%;
+    min-height: 100dvh;
     width: 100%;
-    overflow-y: auto;
+    overflow-x: clip;
+}
+
+@media (max-width: 1023px) {
+    html,
+    body,
+    #root {
+        min-width: 320px;
+        width: 100%;
+    }
+
+    .ml-60,
+    .ml-64 {
+        margin-left: 0 !important;
+        padding-top: 4rem !important;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .h-screen {
+        height: auto !important;
+        min-height: 100dvh;
+    }
+
+    .h-screen.overflow-hidden {
+        overflow: visible !important;
+    }
+
+    aside:not(#greencrm-sidebar).fixed.w-60 {
+        display: none;
+    }
+
+    .w-80 {
+        width: 100% !important;
+    }
+
+    img,
+    canvas,
+    video {
+        max-width: 100%;
+    }
+
+    input,
+    select,
+    textarea {
+        max-width: 100%;
+    }
 }

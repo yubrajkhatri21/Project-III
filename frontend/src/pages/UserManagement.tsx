@@ -189,9 +189,9 @@ const UserManagement: React.FC = () => {
         <div className='flex h-screen bg-white text-gray-900 font-inter overflow-hidden'>
             <Sidebar activeNav={activeNav} />
             {/* MAIN CONTENT */}
-            <main className='flex-1 ml-60 overflow-hidden flex flex-col bg-white relative'>
+            <main className='flex-1 ml-60 min-w-0 overflow-hidden flex flex-col bg-white relative'>
                 {/* TOP HEADER */}
-                <header className='px-8 py-6 border-b border-gray-100 flex items-center justify-between shrink-0'>
+                <header className='px-4 sm:px-6 lg:px-8 py-4 sm:py-6 border-b border-gray-100 flex flex-col items-start justify-between gap-4 shrink-0 sm:flex-row sm:items-center'>
                     <div>
                         <h1 className='text-2xl font-black text-gray-900 tracking-tight'>User Management</h1>
                         <p className='text-sm text-gray-500 font-medium'>Manage team members and access control.</p>
@@ -206,7 +206,7 @@ const UserManagement: React.FC = () => {
                 </header>
 
                 {/* SCROLLABLE AREA */}
-                <div className='flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar'>
+                <div className='flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-8 custom-scrollbar'>
                     {/* SUMMARY METRICS */}
                     <section className='grid grid-cols-1 md:grid-cols-4 gap-6'>
                         {metrics.map((metric, i) => (
@@ -359,14 +359,14 @@ const UserManagement: React.FC = () => {
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 onClick={() => setSelectedUser(null)}
-                                className='absolute inset-0 bg-gray-900/10 backdrop-blur-[2px] z-50'
+                                className='fixed inset-0 bg-gray-900/10 backdrop-blur-[2px] z-50 lg:absolute'
                             />
                             <motion.aside
                                 initial={{ x: '100%' }}
                                 animate={{ x: 0 }}
                                 exit={{ x: '100%' }}
                                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                                className='absolute top-0 right-0 bottom-0 w-[400px] bg-white border-l border-gray-100 shadow-2xl z-50 flex flex-col'
+                                className='fixed inset-0 w-full bg-white border-l border-gray-100 shadow-2xl z-50 flex flex-col lg:absolute lg:inset-y-0 lg:left-auto lg:right-0 lg:w-[400px] lg:max-w-[90vw]'
                             >
                                 <div className='p-6 border-b border-gray-50 flex items-center justify-between bg-gray-50/30'>
                                     <h3 className='font-bold text-gray-900'>User Details</h3>

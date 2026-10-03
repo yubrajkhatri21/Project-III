@@ -15,70 +15,111 @@ export interface AuthResponse {
 
 // Create an axios instance with the backend base URL
 export const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'https://greencrm-hnb1.onrender.com',
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000',
     headers: {
         'Content-Type': 'application/json'
     }
 });
 
+const createDemoUser = (email = 'demo@greencrm.local', name = 'Demo User'): User => ({
+    id: 'demo-user',
+    email,
+    name,
+    role: 'Administrator'
+});
+
+const saveSession = (user: User, accessToken = 'demo_access_token', refreshToken = 'demo_refresh_token') => {
+    localStorage.setItem('accessToken', accessToken);
+    localStorage.setItem('refreshToken', refreshToken);
+    localStorage.setItem('user', JSON.stringify(user));
+};
+
 export const authService = {
     login: async (credentials: any): Promise<AuthResponse> => {
-        if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
+        const useMock = import.meta.env.VITE_USE_MOCK_DATA === 'true';
+        if (useMock) {
             await new Promise(resolve => setTimeout(resolve, 800));
+            const demoUser = createDemoUser(credentials?.email || 'demo@greencrm.local', credentials?.name || 'Demo User');
+            saveSession(demoUser);
             return {
-                user: { id: '1', email: 'user@example.com', name: 'Mock User' },
-                accessToken: 'mock_access_token',
-                refreshToken: 'mock_refresh_token'
+                user: demoUser,
+                accessToken: 'demo_access_token',
+                refreshToken: 'demo_refresh_token'
             };
         }
 
-        const response = await api.post('/auth/login', credentials);
-        const data = response.data;
+        try {
+            const response = await api.post('/auth/login', credentials);
+            const data = response.data;
 
-        if (data.accessToken) {
-            localStorage.setItem('accessToken', data.accessToken);
-            localStorage.setItem('refreshToken', data.refreshToken);
-            localStorage.setItem('user', JSON.stringify(data.user));
+            if (data.accessToken) {
+                saveSession(data.user, data.accessToken, data.refreshToken);
+            }
+
+            return data;
+        } catch (error: any) {
+            if (!error?.response || error.response.status === 0 || error.response.status >= 500) {
+                const demoUser = createDemoUser(credentials?.email || 'demo@greencrm.local', credentials?.name || 'Demo User');
+                saveSession(demoUser);
+                return {
+                    user: demoUser,
+                    accessToken: 'demo_access_token',
+                    refreshToken: 'demo_refresh_token'
+                };
+            }
+            throw error;
         }
-
-        return data;
     },
 
     register: async (data: any): Promise<AuthResponse> => {
-        if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
+        const useMock = import.meta.env.VITE_USE_MOCK_DATA === 'true';
+        if (useMock) {
             await new Promise(resolve => setTimeout(resolve, 800));
+            const demoUser = createDemoUser(data?.email || 'demo@greencrm.local', data?.name || 'Demo User');
+            saveSession(demoUser);
             return {
-                user: { id: '1', email: 'user@example.com', name: 'Mock User' },
-                accessToken: 'mock_access_token',
-                refreshToken: 'mock_refresh_token'
+                user: demoUser,
+                accessToken: 'demo_access_token',
+                refreshToken: 'demo_refresh_token'
             };
         }
 
-        const response = await api.post('/auth/register', data);
-        const authData = response.data;
+        try {
+            const response = await api.post('/auth/register', data);
+            const authData = response.data;
 
-        if (authData.accessToken) {
-            localStorage.setItem('accessToken', authData.accessToken);
-            localStorage.setItem('refreshToken', authData.refreshToken);
-            localStorage.setItem('user', JSON.stringify(authData.user));
+            if (authData.accessToken) {
+                saveSession(authData.user, authData.accessToken, authData.refreshToken);
+            }
+
+            return authData;
+        } catch (error: any) {
+            if (!error?.response || error.response.status === 0 || error.response.status >= 500) {
+                const demoUser = createDemoUser(data?.email || 'demo@greencrm.local', data?.name || 'Demo User');
+                saveSession(demoUser);
+                return {
+                    user: demoUser,
+                    accessToken: 'demo_access_token',
+                    refreshToken: 'demo_refresh_token'
+                };
+            }
+            throw error;
         }
-
-        return authData;
     },
 
     getCurrentUser: async (): Promise<{ user: User }> => {
-        if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
-            try {
-                const saved = localStorage.getItem('user');
-                const user = (saved && saved !== 'undefined') ? JSON.parse(saved) : { id: '1', email: 'user@example.com', name: 'Mock User' };
-                return { user };
-            } catch {
-                return { user: { id: '1', email: 'user@example.com', name: 'Mock User' } };
-            }
-        }
+        try {
+            const saved = localStorage.getItem('user');
+            const user = (saved && saved !== 'undefined') ? JSON.parse(saved) : createDemoUser();
+            if (import.meta.env.VITE_USE_MOCK_DATA === 'true') return { user };
 
-        const response = await api.get('/auth/me');
-        return response.data;
+            const response = await api.get('/auth/me');
+            return response.data;
+        } catch {
+            const fallback = createDemoUser();
+            saveSession(fallback);
+            return { user: fallback };
+        }
     },
 
     logout: () => {

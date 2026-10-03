@@ -1,4 +1,11 @@
 import { Email, EmailProvider } from '@uptiqai/integrations-sdk';
+import { hasGmailConfiguration, sendGmailEmail } from './gmailService.ts';
+
+export interface EmailAttachmentInput {
+    filename: string;
+    mimeType?: string;
+    contentBase64: string;
+}
 
 export interface SendEmailInput {
     to: string | string[];
@@ -6,11 +13,12 @@ export interface SendEmailInput {
     text?: string;
     html?: string;
     from?: string;
+    attachments?: EmailAttachmentInput[];
 }
 
 export interface EmailRuntimeStatus {
     mode: 'live' | 'demo';
-    provider: 'resend' | 'outlook';
+    provider: 'resend' | 'outlook' | 'gmail';
     configured: boolean;
     message: string;
     from?: string;
@@ -27,17 +35,45 @@ function hasOutlookConfiguration(env: Record<string, string | undefined> = proce
     );
 }
 
+const EMAIL_ADDRESS_PATTERN = /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z0-9-]+$/i;
+
+function normalizeRecipient(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        throw new Error('Recipient email address is required.');
+    }
+
+    const addressMatch = trimmed.match(/<([^>]+)>/);
+    const emailCandidate = (addressMatch ? addressMatch[1] : trimmed).trim();
+
+    if (!EMAIL_ADDRESS_PATTERN.test(emailCandidate)) {
+        throw new Error(`Invalid recipient email address: "${trimmed}"`);
+    }
+
+    return emailCandidate;
+}
+
 export function normalizeEmailInput({ to, subject, text, html }: SendEmailInput) {
     const recipients = (Array.isArray(to) ? to : [to])
-        .map(item => item?.trim())
-        .filter((item): item is string => Boolean(item && item.length > 0));
+        .flatMap(item => {
+            if (typeof item !== 'string') {
+                return [];
+            }
+
+            return item
+                .split(/[;,]/)
+                .map(part => part.trim())
+                .filter(Boolean);
+        })
+        .map(normalizeRecipient)
+        .filter((value, index, array) => array.indexOf(value) === index);
 
     const cleanSubject = subject?.trim() ?? '';
     const cleanText = text?.trim() ?? '';
     const cleanHtml = html?.trim() ?? '';
 
     if (!recipients.length) {
-        throw new Error('At least one recipient is required');
+        throw new Error('At least one valid recipient email is required');
     }
 
     if (!cleanSubject) {
@@ -57,15 +93,24 @@ export function normalizeEmailInput({ to, subject, text, html }: SendEmailInput)
 }
 
 export function getEmailRuntimeStatus(env: Record<string, string | undefined> = process.env): EmailRuntimeStatus {
-    const providerName = (env.EMAIL_PROVIDER || 'resend').toLowerCase();
-    const fromAddress = env.EMAIL_FROM || env.OUTLOOK_USER_EMAIL || 'noreply@greencrm.local';
+    const providerName = (env.EMAIL_PROVIDER || 'gmail').toLowerCase();
+    const fromAddress = env.EMAIL_FROM || env.OUTLOOK_USER_EMAIL || env.GMAIL_USER_EMAIL || 'noreply@greencrm.local';
     const apiKey = env.UPTIQ_API_KEY?.trim() ?? '';
     const isRealKey = !!apiKey && !DEMO_KEYS.has(apiKey);
     const outlookReady = hasOutlookConfiguration(env);
-    const provider: EmailRuntimeStatus['provider'] =
-        providerName === 'outlook' ? 'outlook' : 'resend';
+    const gmailReady = hasGmailConfiguration(env);
 
-    if (provider === 'outlook' && outlookReady) {
+    if (providerName === 'gmail' && gmailReady) {
+        return {
+            mode: 'live',
+            provider: 'gmail',
+            configured: true,
+            from: fromAddress,
+            message: 'Gmail integration is configured for live sending via Google OAuth.'
+        };
+    }
+
+    if (providerName === 'outlook' && outlookReady) {
         return {
             mode: 'live',
             provider: 'outlook',
@@ -75,31 +120,44 @@ export function getEmailRuntimeStatus(env: Record<string, string | undefined> = 
         };
     }
 
-    if (!isRealKey && !outlookReady) {
+    if (!isRealKey && !outlookReady && !gmailReady) {
         return {
             mode: 'demo',
-            provider,
+            provider: providerName === 'outlook' ? 'outlook' : providerName === 'gmail' ? 'gmail' : 'resend',
             configured: false,
             from: fromAddress,
-            message: 'Email is running in demo mode. Add a real provider configuration to send live emails.'
+            message: 'Email is running in demo mode. Add Gmail OAuth or another provider to send live emails.'
         };
     }
 
     return {
         mode: 'live',
-        provider,
+        provider: providerName === 'outlook' ? 'outlook' : providerName === 'gmail' ? 'gmail' : 'resend',
         configured: true,
         from: fromAddress,
-        message: provider === 'outlook'
+        message: providerName === 'outlook'
             ? 'Outlook integration is configured for live sending.'
-            : 'Email integration is configured for live sending.'
+            : providerName === 'gmail'
+                ? 'Gmail integration is configured for live sending.'
+                : 'Email integration is configured for live sending.'
     };
 }
 
-export async function sendTransactionalEmail({ to, subject, text, html, from }: SendEmailInput) {
+export async function sendTransactionalEmail({ to, subject, text, html, from, attachments }: SendEmailInput) {
     const { recipients, subject: cleanSubject, text: cleanText, html: cleanHtml } = normalizeEmailInput({ to, subject, text, html });
     const status = getEmailRuntimeStatus();
-    const configuredFrom = from || process.env.EMAIL_FROM || 'noreply@greencrm.local';
+    const configuredFrom = from || process.env.EMAIL_FROM || process.env.GMAIL_USER_EMAIL || 'noreply@greencrm.local';
+
+    if (status.provider === 'gmail' && status.configured) {
+        return sendGmailEmail({
+            to: recipients,
+            subject: cleanSubject,
+            text: cleanText,
+            html: cleanHtml,
+            from: configuredFrom,
+            attachments
+        });
+    }
 
     if (status.mode === 'demo') {
         console.warn('Email API not configured; using local demo mode for email send.');
@@ -109,7 +167,7 @@ export async function sendTransactionalEmail({ to, subject, text, html, from }: 
             provider: status.provider,
             from: configuredFrom,
             mode: 'demo',
-            message: 'Email queued in demo mode. Add a real UPTIQ API key and provider settings to send live emails.'
+            message: 'Email queued in demo mode. Add Gmail OAuth or another provider to send live emails.'
         };
     }
 
